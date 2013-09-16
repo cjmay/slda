@@ -26,7 +26,7 @@ object Io {
 
   /** Transforms contents of a file into a single String */
   def fileToString (f: java.io.File): String = {
-    val source = Source.fromFile(f)
+    val source = Source.fromFile(f, "MacRoman")
     val lines = source.mkString
     source.close()
     lines
