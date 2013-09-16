@@ -4,12 +4,12 @@ import evaluation._
 import wrangle._
 
 object Sim3PfParams {
-  val alpha = 0.1
-  val beta = 0.1
-  val smplSize = 2980
+  val alpha = 0.1 // topic distribution prior
+  val beta = 0.1 // word distribution prior
+  val smplSize = 2980 // number of documents
   val numParticles = 100
-  val ess = 1
-  val rejuvBatchSize = 30
+  val ess = 20 // effective sample size threshold
+  val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
 }
 
