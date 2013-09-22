@@ -5,4 +5,4 @@
 #$ -l num_proc=4,mem_free=24G,h_vmem=24G,h_rt=24:00:00
 #$ -N "slda"
 #cd $BUILD && src/build.sh log-linear ~aclemmer/Jerboa /home/hltcoe/aclemmer/Jerboa/analytic/english-gender/build/twitterMITRE prob
-/export/apps/sbt-0.12.1/bin/sbt -J-Xmx16G -J-XX:+UseSerialGC run
+/export/apps/sbt-0.12.1/bin/sbt -J-Xmx16G -J-XX:+UseSerialGC -J-Xdebug -J-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=4567 run
