@@ -94,10 +94,7 @@ object Text {
         loop(i + 1, accuDocs ++ nextDocs, accuAssig ++ nextAssig)
       }
     }
-    val initAccuDocs = tokenize(docs(0), filter)
-    val initAccuAssig = Array.fill(initAccuDocs.length)(0)
-    if (docs.length == 1) (initAccuDocs, initAccuAssig)
-    else loop(1, initAccuDocs, initAccuAssig)
+		loop(0, Array.empty, Array.empty)
   }
 
   /** Wrapper simply returns the tokenized document */
