@@ -189,8 +189,6 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
 class CollapsedGibbs (docs: Array[String], T: Int, alpha: Double,
 		      beta: Double, k: Int)
 extends Gibbs(docs, T, alpha, beta) {
-  var sampler = new ReservoirSampler[Array[String]](k)
-  
   /** Computes the update step for 1 choice of topic
    *
    * In "Online Inference of Topics with LDA" (Canini et al), equation (1)
