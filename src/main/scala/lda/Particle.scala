@@ -232,6 +232,7 @@ class AssignmentStore () {
     parent(particleId) = parentId
   }
 
+	// TODO why no-op?!
   /** Deletes or merges nodes that are "inactive." A node is inactive if it is
    no particle has copied it during the resampling step. If an entire subtree
    is inactive, then it can be deleted. If a node is inactive, but has active

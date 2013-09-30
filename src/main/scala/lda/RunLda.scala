@@ -35,6 +35,7 @@ object RunLda {
       print(i + " / " + corpus.length)
       //val now = System.nanoTime
       //println("doc " + i + " / " + (corpus.length-1))
+      // TODO: why not ingestDocs?  just because we want to print diagnostics?
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))
