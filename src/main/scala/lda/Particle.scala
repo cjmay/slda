@@ -58,21 +58,6 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
       particle.transition(index, words, currVocabSize,docId) }
   }
 
-  def transitionChildren (words: Array[String], particleId: Int, docId: Int,
-                          idx: Int, oldTopic: Int) = {
-    //if children have not set word, put that word in the old one and update counts
-    val word = words(idx)
-    if (assgStore.children.contains(particleId)) {
-      assgStore.children(particleId).foreach { childId =>
-        if (!assgStore.wordChangedInParticle(particleId, docId, idx)) {
-          val p = particles(childId)
-          p.globalVect.update(word, oldTopic)
-          p.currDocVect.update(word, oldTopic)
-        }
-      }
-    }
-  }
-
   /** Performs update necessary for new document */
   def newDocumentUpdateAll (indexIntoSample: Int, doc: Array[String]): Unit = {
     particles.foreach { particle =>
@@ -349,9 +334,6 @@ class Particle (val topics: Int, val initialWeight: Double,
     docLabels(nextDocId - 1) = mx
 
     sampledTopic
-  }
-
-  def setMaxLabel (docIdx: Int): Unit = {
   }
 
   def newDocumentUpdate (indexIntoSample: Int, doc: Array[String]): Unit = {
