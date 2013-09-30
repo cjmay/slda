@@ -82,6 +82,7 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
   def rejuvenate (wordIds: Array[(Int,Int)], currVocabSize: Int): Unit = {
     //val now = System.currentTimeMillis
     resample(particleWeightArray())
+    assgStore.prune
     // TODO: HACKY TIMING CODE, REMOVE LATER
     //println("\t" + (System.currentTimeMillis - now))
 
