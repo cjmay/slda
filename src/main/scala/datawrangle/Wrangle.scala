@@ -94,7 +94,7 @@ object Text {
         loop(i + 1, accuDocs ++ nextDocs, accuAssig ++ nextAssig)
       }
     }
-		loop(0, Array.empty, Array.empty)
+    loop(0, Array.empty, Array.empty)
   }
 
   /** Wrapper simply returns the tokenized document */

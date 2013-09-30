@@ -67,11 +67,10 @@ AssociativeStreamSampler[T] () {
       slotToReplace = randombits.nextInt(currIdx+1)
       if (slotToReplace < k) sample(slotToReplace) = item
       else slotToReplace = Constants.DidNotAddToSampler
+    } else {
+      sample(currIdx) = item
+      slotToReplace = currIdx
     }
-      else {
-	sample(currIdx) = item
-	slotToReplace = currIdx
-      }
     
     currIdx += 1
     slotToReplace
@@ -85,7 +84,7 @@ AssociativeStreamSampler[T] () {
   def apply (i: Int): T = {
     if (i >= currIdx)
       throw new RuntimeException("reservoir sample hasn't seen " + i +
-				 " objects yet!")
+                                 " objects yet!")
     else sample(i)
   }
 
@@ -129,8 +128,8 @@ MappingStreamSampler[T] () {
       sample += item -> 1
     else {
       for ((k,v) <- sample) {
-	if (v == 1) sample -= k
-	else sample += k -> (v - 1)
+        if (v == 1) sample -= k
+        else sample += k -> (v - 1)
       }
     }
 
@@ -142,8 +141,8 @@ MappingStreamSampler[T] () {
     def loop (i: Int): Unit = {
       if (i >= items.length) Unit
       else {
-	add(items(i))
-	loop(i+1)
+        add(items(i))
+        loop(i+1)
       }
     }
     loop(0)
@@ -190,8 +189,8 @@ MappingStreamSampler[T] () {
     def loop (i: Int): Unit = {
       if (i >= items.length) Unit
       else {
-	add(items(i))
-	loop(i+1)
+        add(items(i))
+        loop(i+1)
       }
     }
     loop(0)
