@@ -583,7 +583,7 @@ class GlobalUpdateVector (val topics: Int) {
     timesTopicAssignedTotal(newTopic) += 1
   }
 
-  /** proper deep copy of DocumentUpdateVector */
+  /** proper deep copy of GlobalUpdateVector */
   def copy (): GlobalUpdateVector = {
     val copiedVect = new GlobalUpdateVector(topics)
     timesWordAssignedTopic.foreach { kv =>
