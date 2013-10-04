@@ -80,11 +80,9 @@ object RunLda {
                           Sim3PfParams.rejuvMcmcSteps)
 
     println("running model...")
-    println("DOCUMENT\t\t\tTIME CONSUMPTION PER WORD (MILLISECONDS)")
     for (i <- 0 to corpus.length-1) {
-      print(i + " / " + corpus.length)
+      println("DOCUMENT " + i + " / " + corpus.length)
       //val now = System.nanoTime
-      //println("doc " + i + " / " + (corpus.length-1))
       // TODO: why not ingestDocs?  just because we want to print diagnostics?
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS

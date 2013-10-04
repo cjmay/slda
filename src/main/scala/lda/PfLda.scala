@@ -53,9 +53,11 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     val docIdx = newDocumentUpdate(Words) // happen before processing word!
     val now = System.currentTimeMillis
     (0 to Words.length-1).foreach{ i => processWord(i, Words, docIdx) }
-    if (Words.length != 0)
-      print("\t\t\t" + ((System.currentTimeMillis - now)/Words.length) + "\t\t\t" + Words.length)
-    println()
+    if (Words.length != 0) {
+      println("TIMEPERWORD " + ((System.currentTimeMillis - now)/Words.length))
+			println("NUMWORDS " + Words.length)
+		}
+    println
 
     docIdx
   }
@@ -72,8 +74,10 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     particles.transitionAll(i, words, currVocabSize, docId)
     particles.normalizeWeights()
 
-    if (particles.shouldRejuvenate())
+    if (particles.shouldRejuvenate()) {
+			println("REJUVENATE " + currWordIdx)
       particles.rejuvenate(allWordIds(), currVocabSize)
+		}
   }
 
   private def newDocumentUpdate (doc: Array[String]): Int = {
