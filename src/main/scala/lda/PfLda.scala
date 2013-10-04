@@ -67,6 +67,7 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     addWordIfNotSeen(currword) // side-effects; must be before particle updates!
     currWordIdx += 1
 
+    // TODO why reweight before transition?
     particles.unnormalizedReweightAll(currword, currVocabSize)
     particles.transitionAll(i, words, currVocabSize, docId)
     particles.normalizeWeights()
@@ -96,6 +97,7 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     }
 
     // if our sample is bigger than the words seen
+    // TODO: when does this happen?  (doesn't seem like it should...)
     if (currIdx > currWordIdx) {
       var smallerSet = new Array[(Int, Int)](currWordIdx)
       Array.copy(wordIds, 0, smallerSet, 0, currWordIdx)

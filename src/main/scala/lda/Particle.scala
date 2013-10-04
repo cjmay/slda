@@ -58,21 +58,6 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
       particle.transition(index, words, currVocabSize,docId) }
   }
 
-  def transitionChildren (words: Array[String], particleId: Int, docId: Int,
-                          idx: Int, oldTopic: Int) = {
-    //if children have not set word, put that word in the old one and update counts
-    val word = words(idx)
-    if (assgStore.children.contains(particleId)) {
-      assgStore.children(particleId).foreach { childId =>
-        if (!assgStore.wordChangedInParticle(particleId, docId, idx)) {
-          val p = particles(childId)
-          p.globalVect.update(word, oldTopic)
-          p.currDocVect.update(word, oldTopic)
-        }
-      }
-    }
-  }
-
   /** Performs update necessary for new document */
   def newDocumentUpdateAll (indexIntoSample: Int, doc: Array[String]): Unit = {
     particles.foreach { particle =>
@@ -98,6 +83,7 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
 		print(".")
     //val now = System.currentTimeMillis
     resample(particleWeightArray())
+    assgStore.prune
     // TODO: HACKY TIMING CODE, REMOVE LATER
     //println("\t" + (System.currentTimeMillis - now))
 
@@ -233,6 +219,7 @@ class AssignmentStore () {
     parent(particleId) = parentId
   }
 
+	// TODO why no-op?!
   /** Deletes or merges nodes that are "inactive." A node is inactive if it is
    no particle has copied it during the resampling step. If an entire subtree
    is inactive, then it can be deleted. If a node is inactive, but has active
@@ -349,9 +336,6 @@ class Particle (val topics: Int, val initialWeight: Double,
     docLabels(nextDocId - 1) = mx
 
     sampledTopic
-  }
-
-  def setMaxLabel (docIdx: Int): Unit = {
   }
 
   def newDocumentUpdate (indexIntoSample: Int, doc: Array[String]): Unit = {
@@ -600,7 +584,7 @@ class GlobalUpdateVector (val topics: Int) {
     timesTopicAssignedTotal(newTopic) += 1
   }
 
-  /** proper deep copy of DocumentUpdateVector */
+  /** proper deep copy of GlobalUpdateVector */
   def copy (): GlobalUpdateVector = {
     val copiedVect = new GlobalUpdateVector(topics)
     timesWordAssignedTopic.foreach { kv =>
