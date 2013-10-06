@@ -63,6 +63,7 @@ AssociativeStreamSampler[T] () {
   def addItem (item: T): Int = {
     var slotToReplace = Constants.DidNotAddToSampler
     if (currIdx >= k) {
+			if (currIdx == k) println("RESERVOIR SAMPLING BEGINS")
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
       slotToReplace = randombits.nextInt(currIdx+1)
       if (slotToReplace < k) sample(slotToReplace) = item
