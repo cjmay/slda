@@ -68,7 +68,6 @@ object Evaluation {
   def writeOut (model: PfLda, labels: Array[String],
                 labelTypes: Collection[String], filename: String): Unit = {
     val nmis = nmi(model, labels, labelTypes)
-    println(nmis.deep)
     val writer = new PrintWriter(new File(filename))
 
     for (e <- nmis) {
