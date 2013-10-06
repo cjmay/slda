@@ -65,14 +65,9 @@ AssociativeStreamSampler[T] () {
     if (currIdx >= k) {
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
       slotToReplace = randombits.nextInt(currIdx+1)
-      if (slotToReplace < k) {
-				println("RESERVOIR ADD")
-				sample(slotToReplace) = item
-			} else {
-				slotToReplace = Constants.DidNotAddToSampler
-			}
+      if (slotToReplace < k) sample(slotToReplace) = item
+      else slotToReplace = Constants.DidNotAddToSampler
     } else {
-			println("RESERVOIR ADD TRIVIAL")
       sample(currIdx) = item
       slotToReplace = currIdx
     }
