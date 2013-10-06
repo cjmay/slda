@@ -23,4 +23,5 @@ then
     git clone "$ROOT_REPO_PATH" "$new_repo_path"
     ln -s "$ROOT_REPO_PATH/data/20news-bydate-train" "$new_repo_path/"
     ln -s "$ROOT_REPO_PATH/data/20news-bydate-test" "$new_repo_path/"
+    mkdir "$new_repo_path/results"
 fi
