@@ -14,14 +14,8 @@ do
 done
 
 echo "Cloning $ROOT_REPO_PATH to $new_repo_path"
-echo -n "Proceed (y/n)? "
-read -n 1 answer
-echo
 
-if [ "$answer" == "y" ]
-then
-    git clone "$ROOT_REPO_PATH" "$new_repo_path"
-    ln -s "$ROOT_REPO_PATH/data/20news-bydate-train" "$new_repo_path/data/"
-    ln -s "$ROOT_REPO_PATH/data/20news-bydate-test" "$new_repo_path/data/"
-    mkdir "$new_repo_path/results"
-fi
+git clone "$ROOT_REPO_PATH" "$new_repo_path"
+ln -s "$ROOT_REPO_PATH/data/20news-bydate-train" "$new_repo_path/data/"
+ln -s "$ROOT_REPO_PATH/data/20news-bydate-test" "$new_repo_path/data/"
+mkdir "$new_repo_path/results"
