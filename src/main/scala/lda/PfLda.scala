@@ -55,8 +55,8 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     (0 to Words.length-1).foreach{ i => processWord(i, Words, docIdx) }
     if (Words.length != 0) {
       println("TIMEPERWORD " + ((System.currentTimeMillis - now)/Words.length))
-			println("NUMWORDS " + Words.length)
-		}
+      println("NUMWORDS " + Words.length)
+    }
     println
 
     docIdx
@@ -75,14 +75,16 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     particles.normalizeWeights()
 
     if (particles.shouldRejuvenate()) {
-			println("REJUVENATE " + currWordIdx)
+      println("REJUVENATE " + currWordIdx)
       particles.rejuvenate(allWordIds(docId, i+1), currVocabSize)
-		}
+    }
   }
 
   private def newDocumentUpdate (doc: Array[String]): Int = {
     val index = rejuvSeq.addItem(doc)
     particles.newDocumentUpdateAll(index, doc)
+    if (index != Constants.DidNotAddToSampler)
+      println("RESERVOIRADD " + index)
     index
   }
 
