@@ -194,13 +194,15 @@ class AssignmentStore () {
   def resampledSetTopic (particleId: Int, docId: Int, wordIdx: Int, topic: Int):
   Unit = {
     val oldTopic = getTopic(particleId, docId, wordIdx)
-    if (children contains particleId) {
-      for (childId <- children(particleId)) {
-        if (! wordChangedInParticle(childId, docId, wordIdx))
-          resampledSetTopic(childId, docId, wordIdx, oldTopic)
+    if (oldTopic != topic) {
+      if (children contains particleId) {
+        for (childId <- children(particleId)) {
+          if (! wordChangedInParticle(childId, docId, wordIdx))
+            resampledSetTopic(childId, docId, wordIdx, oldTopic)
+        }
       }
+      assgMap.setTopic(particleId, docId, wordIdx, topic)
     }
-    assgMap.setTopic(particleId, docId, wordIdx, topic)
   }
 
   def setTopic (particleId: Int, docId: Int, wordIdx: Int, topic: Int):
