@@ -15,7 +15,7 @@ done
 
 echo "Cloning $ROOT_REPO_PATH to $new_repo_path"
 echo -n "Proceed (y/n)? "
-answer=`read -n 1`
+read -n 1 answer
 echo
 
 if [ "$answer" == "y" ]
