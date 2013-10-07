@@ -75,6 +75,8 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
 
   /** Performs update necessary for new document */
   def newDocumentUpdateAll (indexIntoSample: Int, doc: Array[String]): Unit = {
+    if (indexIntoSample != Constants.DidNotAddToSampler)
+      assgStore.removeDocument(indexIntoSample)
     particles.foreach { particle =>
       particle.newDocumentUpdate(indexIntoSample, doc) }
   }
@@ -224,6 +226,9 @@ class AssignmentStore () {
     assgMap.setTopic(particleId, docId, wordIdx, topic)
   }
 
+  def removeDocument (docId: Int): Unit =
+    assgMap.removeDocument(docId)
+
   /** Creates new topic assignment vector for document */
   def newDocument (particleId: Int, newDocIndex: Int, doc: Array[String],
                    topics: Int, globalVect: GlobalUpdateVector,
@@ -247,6 +252,7 @@ class AssignmentStore () {
     parent(particleId) = parentId
   }
 
+  // TODO why no-op?!
   /** Deletes or merges nodes that are "inactive." A node is inactive if it is
    no particle has copied it during the resampling step. If an entire subtree
    is inactive, then it can be deleted. If a node is inactive, but has active
@@ -294,6 +300,10 @@ class AssignmentMap () {
     else
       assgMap(particleId)(docId)(wordId) = topic
   }
+
+  def removeDocument (docId: Int): Unit =
+    for (particleMap <- assgMap.values)
+      particleMap -= docId
 
   /** Builds new representation of topic assignments */
   def newDoc (particleId: Int, docId: Int, doc: Array[String], topics: Int,
@@ -387,7 +397,7 @@ class Particle (val topics: Int, val initialWeight: Double,
 
   /** Rejuvenates particle by MCMC; we currently repeat the update step
    `batchSize` times. w is the *current* size of the vocabulary */
-	// TODO: why repeat batchSize times?!
+  // TODO: why repeat batchSize times?!
   def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, w: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
     for (i <- 0 to batchSize-1)
