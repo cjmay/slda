@@ -211,7 +211,7 @@ class AssignmentStore () {
     if (children contains particleId) {
       for (childId <- children(particleId)) {
         if (! wordChangedInParticle(childId, docId, wordIdx))
-          setTopic(childId, docId, wordIdx, oldTopic)
+          resampledSetTopic(childId, docId, wordIdx, oldTopic)
       }
     }
     assgMap.setTopic(particleId, docId, wordIdx, topic)
