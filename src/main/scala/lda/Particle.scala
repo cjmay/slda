@@ -14,6 +14,7 @@ import stream._
 class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
                      val numParticles: Int, val ess: Double,
                      val rejuvBatchSize: Int,
+                     val rejuvMcmcSteps: Int,
                      var rejuvSeq: ReservoirSampler[Array[String]]) {
   var currId = 0  // NOTE: This must come before initParticles, otherwise it
                   // resets the id count
@@ -103,16 +104,16 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
     //println("\t" + (System.currentTimeMillis - now))
 
     // pick rejuvenation sequence in the reservoir
-    rejuvenateAll(wordIds, rejuvBatchSize, currVocabSize)
+    rejuvenateAll(wordIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
   }
 
   /** performs rejuvenation MCMC step for every particle */
-  def rejuvenateAll (wordIds: Array[(Int,Int)], batchSize: Int,
+  def rejuvenateAll (wordIds: Array[(Int,Int)], batchSize: Int, mcmcSteps: Int,
                      currVocabSize: Int): Unit = {
     particles.foreach {
       p =>
-        p.rejuvenate(wordIds, batchSize, currVocabSize) }
+        p.rejuvenate(wordIds, batchSize, mcmcSteps, currVocabSize) }
   }
 
   /** Helper method puts the weights of particles into an array, so that
@@ -395,12 +396,12 @@ class Particle (val topics: Int, val initialWeight: Double,
     nextDocId += 1
   }
 
-  /** Rejuvenates particle by MCMC; we currently repeat the update step
-   `batchSize` times. w is the *current* size of the vocabulary */
-  // TODO: why repeat batchSize times?!
-  def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, w: Int): Unit = {
+  /** Rejuvenates particle by MCMC.
+   w is the *current* size of the vocabulary */
+  def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, mcmcSteps: Int,
+			w: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
-    for (i <- 0 to batchSize-1)
+    for (i <- 0 to mcmcSteps-1)
       sample.foreach{ wordId => resampleRejuvSeqWord(wordId._1, wordId._2, w) }
   }
 

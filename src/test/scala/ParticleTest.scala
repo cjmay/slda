@@ -21,9 +21,10 @@ class ParticleTests extends FunSuite {
     val numParticles = 5
     val ess = 20
     val rejuvBatchSize = 256
+    val rejuvMcmcSteps = 256
     val rejuvSeq = new ReservoirSampler[Array[String]](numDocs)
     var ps = new ParticleStore (t, alpha, beta, numParticles, ess,
-                                rejuvBatchSize, rejuvSeq)
+                                rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
     ps
   }
 
