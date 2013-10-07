@@ -312,7 +312,6 @@ class Particle (val topics: Int, val initialWeight: Double,
   var docLabels = ArrayBuffer[Int]()  // labels for all the documents
   var rsIdxToLabelsIdx = HashMap[Int,Int]()  // resvr sample -> docLabels idx
   var nextDocId = 0
-  println("RESERVOIR: " + rejuvSeq.occupied + " / " + rejuvSeq.capacity)
 
   /** Generates an unnormalized weight for the particle; returns new wgt. NOTE:
    side-effects on the particle's weight as well! */
