@@ -30,7 +30,7 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
   var currWordIdx = 0
 
   var particles = new ParticleStore(T, alpha, beta, numParticles, ess,
-                                    rejuvBatchSize, rejuvSeq)
+                                    rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
   private def simpleFilter (str: String): Boolean = {
     val patt = new Regex("\\W");
