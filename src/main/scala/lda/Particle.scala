@@ -204,6 +204,19 @@ class AssignmentStore () {
    consistency. Note that the old value should be set in the children, unless
    they've already been set, for consistency! Unlike `get` the parent are NOT
    affected. */
+  // TODO  tailrec?!
+  def resampledSetTopic (particleId: Int, docId: Int, wordIdx: Int, topic: Int):
+  Unit = {
+    val oldTopic = getTopic(particleId, docId, wordIdx)
+    if (children contains particleId) {
+      for (childId <- children(particleId)) {
+        if (! wordChangedInParticle(childId, docId, wordIdx))
+          setTopic(childId, docId, wordIdx, oldTopic)
+      }
+    }
+    assgMap.setTopic(particleId, docId, wordIdx, topic)
+  }
+
   def setTopic (particleId: Int, docId: Int, wordIdx: Int, topic: Int):
   Unit = {
     assgMap.setTopic(particleId, docId, wordIdx, topic)
@@ -372,6 +385,7 @@ class Particle (val topics: Int, val initialWeight: Double,
 
   /** Rejuvenates particle by MCMC; we currently repeat the update step
    `batchSize` times. w is the *current* size of the vocabulary */
+	// TODO: why repeat batchSize times?!
   def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, w: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
     for (i <- 0 to batchSize-1)
@@ -423,7 +437,7 @@ class Particle (val topics: Int, val initialWeight: Double,
     // should use indices to decrement old topic counts?
     globalVect.resampledUpdate(word, oldTopic, newTopic)
     docUpdateVect.resampledUpdate(wordIdx, oldTopic, newTopic)
-    assgStore.setTopic(particleId, docIdx, wordIdx, newTopic)
+    assgStore.resampledSetTopic(particleId, docIdx, wordIdx, newTopic)
 
     // set document label if it changes
     val labelId = rsIdxToLabelsIdx(docIdx)
