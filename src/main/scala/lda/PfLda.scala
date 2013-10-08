@@ -37,6 +37,19 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
   }
 
+  def initialize(docs: Array[String], mcmcSteps: Int) = {
+    var initWords: Array[Array[String]] = Array.fill(docs.size)(Array.empty)
+    for (docIdx <- 0 to docs.size-1) {
+      val words = makeBOW(docs(docIdx))
+      initWords(docIdx) = words
+      newDocumentUpdateInitial(docIdx, words)
+    }
+    particles.initialize(initWords, mcmcSteps, currVocabSize)
+    // TODO add docs to reservoir, clean p 0, clone p 0, rejuv/resample step
+  }
+
+  def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
+
   /** Ingests set of documents, updating LDA run as we go */
   def ingestDocs (docs: Array[String]): Unit =
     docs.foreach{ doc => ingestDoc(doc) }
@@ -48,14 +61,14 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
    * lies below a certain threshold, we resample the topics
    */
   def ingestDoc (doc: String): Int = {
-    val Words = Text.bow(doc, (str: String) => simpleFilter(str))
+    val words = makeBOW(doc)
 
-    val docIdx = newDocumentUpdate(Words) // happen before processing word!
+    val docIdx = newDocumentUpdate(words) // happen before processing word!
     val now = System.currentTimeMillis
-    (0 to Words.length-1).foreach{ i => processWord(i, Words, docIdx) }
-    if (Words.length != 0) {
-      println("TIMEPERWORD " + ((System.currentTimeMillis - now)/Words.length))
-      println("NUMWORDS " + Words.length)
+    (0 to words.length-1).foreach{ i => processWord(i, words, docIdx) }
+    if (words.length != 0) {
+      println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
+      println("NUMWORDS " + words.length)
     }
     println
 
@@ -87,6 +100,9 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
       println("RESERVOIRADD " + index)
     index
   }
+
+  private def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]) =
+    particles.newDocumentUpdateInitial(docIdx, doc)
 
   /** Array of wordIds; a word's id is a tuple (docId, wordIndex), where `docId`
    tells us where in `rejuvSeq` our document is, and `wordIndex`, which tells us

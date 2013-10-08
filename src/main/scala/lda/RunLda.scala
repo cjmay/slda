@@ -13,6 +13,8 @@ object Sim3PfParams {
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 177
+  val initialBatchMcmcSteps = 2000
 }
 
 object Rel3PfParams {
@@ -23,6 +25,8 @@ object Rel3PfParams {
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 158
+  val initialBatchMcmcSteps = 2000
 }
 
 object Diff3PfParams {
@@ -33,6 +37,8 @@ object Diff3PfParams {
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 167
+  val initialBatchMcmcSteps = 2000
 }
 
 object Subset20PfParams {
@@ -43,6 +49,8 @@ object Subset20PfParams {
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 0
+  val initialBatchMcmcSteps = 2000
 }
 
 object Slash6PfParams {
@@ -53,6 +61,8 @@ object Slash6PfParams {
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 0
+  val initialBatchMcmcSteps = 2000
 }
 
 object Slash7PfParams {
@@ -63,6 +73,8 @@ object Slash7PfParams {
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
+  val initialBatchSize = 0
+  val initialBatchMcmcSteps = 2000
 }
 
 object RunLda {
@@ -79,11 +91,14 @@ object RunLda {
                           Sim3PfParams.ess, Sim3PfParams.rejuvBatchSize,
                           Sim3PfParams.rejuvMcmcSteps)
 
+    model.initialize(
+      (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_).toArray),
+      Sim3PfParams.initialBatchMcmcSteps)
+
     println("running model...")
-    for (i <- 0 to corpus.length-1) {
+    for (i <- initialBatchSize to corpus.length-1) {
       println("DOCUMENT " + i + " / " + corpus.length)
       //val now = System.nanoTime
-      // TODO: why not ingestDocs?  just because we want to print diagnostics?
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))

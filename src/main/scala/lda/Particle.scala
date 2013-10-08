@@ -67,6 +67,12 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
       particle.newDocumentUpdate(indexIntoSample, doc) }
   }
 
+  def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]): Unit = {
+		val particle = particles(0)
+		particle.clearAssignments
+		particle.newDocumentUpdateInitial(docIdx, doc)
+  }
+
   /** Resamples particles proportional to their probability */
   def resample (unnormalizedWeights: Array[Double]): Unit = {
     particles = multinomialResample(unnormalizedWeights)
@@ -101,6 +107,18 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
       p =>
         p.rejuvenate(wordIds, batchSize, mcmcSteps, currVocabSize) }
   }
+
+	def initialize(docWords: Array[Array[String]], mcmcSteps: Int,
+			currVocabSize: Int) = {
+		for (t <- 0 to mcmcSteps-1) {
+			for (docIdx <- 0 to docs.size-1) {
+				val words = docWords(docIdx)
+				for (wordIdx <- 0 to words.size-1) {
+					resampleWord(docIdx, wordIdx, currVocabSize)
+				}
+			}
+		}
+	}
 
   /** Helper method puts the weights of particles into an array, so that
    `particles(i) == weights(i)` */
@@ -180,6 +198,9 @@ class AssignmentStore () {
       return getTopic(parent(particleId), docId, wordIdx)
     }
   }
+
+	def clearParticle(particleId: Int) =
+		assgMap.clearParticle(particleId)
 
   /** Checks to see if a particle contains a topic assignment for some word in
    some document */
@@ -267,6 +288,9 @@ class AssignmentMap () {
     assgMap(particleId)(docId).contains(wordId)
   }
 
+	def clearParticle(particleId: Int) =
+    assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
+
   /** Queries particle for topic assignment of a word in document; returns None
    if there is no such word in that document of that particle */
   def getTopic (particleId: Int, docId: Int, wordId: Int): Int = {
@@ -324,6 +348,16 @@ class Particle (val topics: Int, val initialWeight: Double,
   var docLabels = ArrayBuffer[Int]()  // labels for all the documents
   var rsIdxToLabelsIdx = HashMap[Int,Int]()  // resvr sample -> docLabels idx
   var nextDocId = 0
+
+	def clearAssignments =
+		assgStore.clearParticle(particleId)
+
+  def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]): Unit = {
+    currDocVect = new DocumentUpdateVector(topics)
+		assgStore.newDocument(particleId, docIdx, doc, topics,
+												globalVect, currDocVect)
+		// TODO randomize assignments!
+	}
 
   /** Generates an unnormalized weight for the particle; returns new wgt. NOTE:
    side-effects on the particle's weight as well! */
