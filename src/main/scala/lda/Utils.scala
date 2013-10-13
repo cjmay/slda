@@ -50,6 +50,9 @@ object Stats {
       }
     }
   }
+
+  def sampleInt(bound: Int): Int =
+    sampler.nextInt(bound)
   
   /** Samples from simple categorical distribution; takes a normalized
    probability measure and returns a randomly-sampled index */

@@ -25,12 +25,10 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
              val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
   val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
   var vocabToId = HashMap[String,Int]()
-  var rejuvSeq = new ReservoirSampler[Array[String]](smplSize)
   var currVocabSize = 0
   var currWordIdx = 0
-
-  var particles = new ParticleStore(T, alpha, beta, numParticles, ess,
-                                    rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
+  var particles: ParticleStore
+  var rejuvSeq: ReservoirSampler[DocumentToken]
 
   private def simpleFilter (str: String): Boolean = {
     val patt = new Regex("\\W");
@@ -38,14 +36,18 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
   }
 
   def initialize(docs: Array[String], mcmcSteps: Int) = {
-    var initWords: Array[Array[String]] = Array.fill(docs.size)(Array.empty)
-    for (docIdx <- 0 to docs.size-1) {
-      val words = makeBOW(docs(docIdx))
-      initWords(docIdx) = words
-      newDocumentUpdateInitial(docIdx, words)
-    }
+    val initWords = docs.map(makeBOW(_)).toArray
+
+    rejuvSeq = new ReservoirSampler(initWords.map(_.size).sum)
+    particles = new ParticleStore(T, alpha, beta, numParticles, ess,
+                                  rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
+
+    for (docIdx <- 0 to docs.size-1)
+      newDocumentUpdateInitial(docIdx, initWords(docIdx))
+
     particles.initialize(initWords, mcmcSteps, currVocabSize)
-    // TODO add docs to reservoir, clean p 0, clone p 0, rejuv/resample step
+
+    // TODO clean p 0, clone p 0, rejuv/resample step
   }
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
@@ -101,8 +103,12 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     index
   }
 
-  private def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]) =
+  private def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]) = {
+    for (word <- doc)
+      rejuvSeq.addItem(new DocumentToken(docIdx, word))
+
     particles.newDocumentUpdateInitial(docIdx, doc)
+  }
 
   /** Array of wordIds; a word's id is a tuple (docId, wordIndex), where `docId`
    tells us where in `rejuvSeq` our document is, and `wordIndex`, which tells us

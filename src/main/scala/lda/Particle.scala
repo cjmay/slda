@@ -8,6 +8,10 @@ import scala.util.{ Random => Random }
 import globals.Constants
 import stream._
 
+type DocumentToken = Triple[Int,String]
+
+// TODO probably will want to change wordIdx to word in most places
+
 /** A memory- and time-efficient way to represent particles, as detailed in
  section 4 of Canini Shi Griffiths. Manages all the logic of particle
  manipulation, copying, reading, etc */
@@ -15,7 +19,7 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
                      val numParticles: Int, val ess: Double,
                      val rejuvBatchSize: Int,
                      val rejuvMcmcSteps: Int,
-                     var rejuvSeq: ReservoirSampler[Array[String]]) {
+                     var rejuvSeq: ReservoirSampler[DocumentToken]) {
   var currId = 0  // NOTE: This must come before initParticles, otherwise it
                   // resets the id count
   var (assgStore,particles) = initParticles()
@@ -68,9 +72,9 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
   }
 
   def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]): Unit = {
-		val particle = particles(0)
-		particle.clearAssignments
-		particle.newDocumentUpdateInitial(docIdx, doc)
+    val particle = particles(0)
+    particle.clearAssignments
+    particle.newDocumentUpdateInitial(docIdx, doc)
   }
 
   /** Resamples particles proportional to their probability */
@@ -105,20 +109,28 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
                      currVocabSize: Int): Unit = {
     particles.foreach {
       p =>
-        p.rejuvenate(wordIds, batchSize, mcmcSteps, currVocabSize) }
+        val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
+        p.rejuvenate(sample, batchSize, mcmcSteps, currVocabSize)
+    }
   }
 
-	def initialize(docWords: Array[Array[String]], mcmcSteps: Int,
-			currVocabSize: Int) = {
-		for (t <- 0 to mcmcSteps-1) {
-			for (docIdx <- 0 to docs.size-1) {
-				val words = docWords(docIdx)
-				for (wordIdx <- 0 to words.size-1) {
-					resampleWord(docIdx, wordIdx, currVocabSize)
-				}
-			}
-		}
-	}
+  def initialize(docWords: Array[Array[String]], mcmcSteps: Int,
+      currVocabSize: Int) = {
+    val particle = particles(0)
+
+    // Do initial batch iterations
+    particle.rejuvenate(wordIds, batchSize, mcmcSteps, currVocabSize)
+
+    // Prepare to start pf
+    // TODO: need to *reset* reservoir, assgstore...
+    for (docIdx <- 0 to docWords.size-1) {
+      val words = docWords(docIdx)
+      for (wordIdx <- 0 to words.size-1) {
+        val topicIdx = //TODO
+        rejuvSeq.addItem(new DocumentToken(docIdx, words(wordIdx)))
+      }
+    }
+  }
 
   /** Helper method puts the weights of particles into an array, so that
    `particles(i) == weights(i)` */
@@ -199,8 +211,8 @@ class AssignmentStore () {
     }
   }
 
-	def clearParticle(particleId: Int) =
-		assgMap.clearParticle(particleId)
+  def clearParticle(particleId: Int) =
+    assgMap.clearParticle(particleId)
 
   /** Checks to see if a particle contains a topic assignment for some word in
    some document */
@@ -288,7 +300,7 @@ class AssignmentMap () {
     assgMap(particleId)(docId).contains(wordId)
   }
 
-	def clearParticle(particleId: Int) =
+  def clearParticle(particleId: Int) =
     assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
 
   /** Queries particle for topic assignment of a word in document; returns None
@@ -344,24 +356,49 @@ class Particle (val topics: Int, val initialWeight: Double,
   var globalVect = new GlobalUpdateVector(topics)
   var weight = initialWeight
   var currDocVect = new DocumentUpdateVector(topics)
-  var rejuvSeqDocVects = HashMap[Int,DocumentUpdateVector]()
+  var rejuvSeqDocVects = Array[DocumentUpdateVector] = Array.fill(rejuvSeq.capacity)(null)
   var docLabels = ArrayBuffer[Int]()  // labels for all the documents
-  var rsIdxToLabelsIdx = HashMap[Int,Int]()  // resvr sample -> docLabels idx
+  var rsIdxToLabelsIdx: Array[Int] = Array.fill(rejuvSeq.capacity)(0)
   var nextDocId = 0
+  var nextRsIdx = 0
 
-	def clearAssignments =
-		assgStore.clearParticle(particleId)
+  def clearAssignments =
+    assgStore.clearParticle(particleId)
 
   def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]): Unit = {
+    // Create data structures for this doc
     currDocVect = new DocumentUpdateVector(topics)
-		assgStore.newDocument(particleId, docIdx, doc, topics,
-												globalVect, currDocVect)
-		// TODO randomize assignments!
-	}
+    assgStore.newDocument(particleId, docIdx, doc, topics,
+                          globalVect, currDocVect)
+
+    // Store doc vects, set random topic assignments
+    for (wordIdx <- 0 to doc.size-1) {
+      rejuvSeqDocVects(nextRsIdx) = currDocVect
+      // TODO does it make sense to even do this?
+      //rsIdxToLabelsIdx(nextRsIdx) = nextDocId
+      //nextDocId += 1
+      nextRsIdx += 1
+
+      val word = doc(wordIdx)
+      val sampledTopic = Stats.sampleInt(topics)
+      globalVect.update(word, sampledTopic)
+      currDocVect.update(word, sampledTopic)
+      assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
+    }
+
+    // Set the label of the document
+    var mx = 0
+    for (t <- 0 until topics) {
+      if (currDocVect.timesTopicOccursInDoc(t) > mx)
+        mx = t
+    }
+    docLabels(nextDocId - 1) = mx
+  }
 
   /** Generates an unnormalized weight for the particle; returns new wgt. NOTE:
    side-effects on the particle's weight as well! */
   def unnormalizedReweight (word: String, w: Int): Double = {
+    // TODO how/why is this correct?
     val prior = unnormalizedPrior(word, w)
     weight = weight * prior
     weight
@@ -416,10 +453,9 @@ class Particle (val topics: Int, val initialWeight: Double,
   /** Rejuvenates particle by MCMC.
    w is the *current* size of the vocabulary */
   def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, mcmcSteps: Int,
-			w: Int): Unit = {
-    val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
+      w: Int): Unit = {
     for (i <- 0 to mcmcSteps-1)
-      sample.foreach{ wordId => resampleRejuvSeqWord(wordId._1, wordId._2, w) }
+      wordIds.foreach{ wordId => resampleRejuvSeqWord(wordId._1, wordId._2, w) }
   }
 
   /** Resamples a word in the rejuvenation sequence; w is *current* size of
@@ -443,16 +479,16 @@ class Particle (val topics: Int, val initialWeight: Double,
     copiedParticle.currDocVect = currDocVect.copy
     assgStore.newParticle(newAssgStoreId, particleId)
     // copy rejuvSeqDocVects
-    rejuvSeqDocVects.foreach { kv =>
-      if (kv._2 == tmpCurrDocVect)
-        copiedParticle.rejuvSeqDocVects(kv._1) = copiedParticle.currDocVect
+    for (rsIdx <- 0 to rejuvSeqDocVects.size-1) {
+      if (rejuvSeqDocVects(rsIdx) == tmpCurrDocVect)
+        copiedParticle.rejuvSeqDocVects(rsIdx) = copiedParticle.currDocVect
       else
-        copiedParticle.rejuvSeqDocVects(kv._1) = rejuvSeqDocVects(kv._1).copy()}
+        copiedParticle.rejuvSeqDocVects(rsIdx) = rejuvSeqDocVects(rsIdx).copy()
+    }
     for (e <- docLabels)
       copiedParticle.docLabels += e
-    rsIdxToLabelsIdx.foreach { kv =>
-      copiedParticle.rsIdxToLabelsIdx(kv._1) = rsIdxToLabelsIdx(kv._1) }
-    copiedParticle.rsIdxToLabelsIdx
+    for (rsIdx <- 0 to rsIdxToLabelsIdx.size-1)
+      copiedParticle.rsIdxToLabelsIdx(rsIdx) = rsIdxToLabelsIdx(rsIdx)
     copiedParticle.nextDocId = nextDocId
     copiedParticle
   }
@@ -568,7 +604,7 @@ class Particle (val topics: Int, val initialWeight: Double,
 
   override def toString(): String = {
     var s = "particle: "
-    rejuvSeqDocVects.foreach { kv => s += docAssgs(kv._1).deep.mkString(" ")}
+    rejuvSeqDocVects.foreach { dv => s += docAssgs(dv).deep.mkString(" ") }
     s
   }
 }
