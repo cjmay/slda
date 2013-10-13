@@ -8,18 +8,17 @@ import scala.util.{ Random => Random }
 import globals.Constants
 import stream._
 
-type DocumentToken = Triple[Int,String]
-
-// TODO probably will want to change wordIdx to word in most places
+object ParticleStore {
+  type DocumentToken = Triple[Int,Int,String]
+}
 
 /** A memory- and time-efficient way to represent particles, as detailed in
  section 4 of Canini Shi Griffiths. Manages all the logic of particle
  manipulation, copying, reading, etc */
 class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
-                     val numParticles: Int, val ess: Double,
-                     val rejuvBatchSize: Int,
-                     val rejuvMcmcSteps: Int,
-                     var rejuvSeq: ReservoirSampler[DocumentToken]) {
+    val numParticles: Int, val ess: Double, val rejuvBatchSize: Int,
+    val rejuvMcmcSteps: Int,
+    var rejuvSeq: ReservoirSampler[ParticleStore.DocumentToken]) {
   var currId = 0  // NOTE: This must come before initParticles, otherwise it
                   // resets the id count
   var (assgStore,particles) = initParticles()
@@ -57,10 +56,10 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
 
   /** Performs transition for every particle (see comment on particle method)
    */
-  def transitionAll (index: Int, words: Array[String], currVocabSize: Int,
-                     docId: Int): Unit = {
+  def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
+                    docIdx: Int): Unit = {
     particles.foreach { particle =>
-      particle.transition(index, words, currVocabSize,docId) }
+      particle.transition(wordIdx, word, currVocabSize, docIdx) }
   }
 
   /** Performs update necessary for new document */
@@ -92,7 +91,7 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
   }
 
   /** Prepares to perform, and performs rejuvenation MCMC step */
-  def rejuvenate (wordIds: Array[(Int,Int)], currVocabSize: Int): Unit = {
+  def rejuvenate (tokenIds: Array[Int], currVocabSize: Int): Unit = {
     //val now = System.currentTimeMillis
     resample(particleWeightArray())
     assgStore.prune
@@ -100,17 +99,17 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
     //println("\t" + (System.currentTimeMillis - now))
 
     // pick rejuvenation sequence in the reservoir
-    rejuvenateAll(wordIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
+    rejuvenateAll(tokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
   }
 
   /** performs rejuvenation MCMC step for every particle */
-  def rejuvenateAll (wordIds: Array[(Int,Int)], batchSize: Int, mcmcSteps: Int,
+  def rejuvenateAll (tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int,
                      currVocabSize: Int): Unit = {
     particles.foreach {
       p =>
-        val sample = Stats.sampleWithoutReplacement(wordIds, batchSize)
-        p.rejuvenate(sample, batchSize, mcmcSteps, currVocabSize)
+        val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
+        p.rejuvenate(sample, mcmcSteps, currVocabSize)
     }
   }
 
@@ -119,15 +118,20 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
     val particle = particles(0)
 
     // Do initial batch iterations
-    particle.rejuvenate(wordIds, batchSize, mcmcSteps, currVocabSize)
+    val tokenIds = (0 to docWords.map(_.size).sum-1).toArray
+    particle.rejuvenate(tokenIds, mcmcSteps, currVocabSize)
 
-    // Prepare to start pf
-    // TODO: need to *reset* reservoir, assgstore...
+    // Prepare for particle filtering:
+    // Reset reservoir to non-trivial size and re-add documents,
+    // inform particle 0 of new reservoir elements,
+    // copy particle 0 to other particles,
+    // and perform rejuvenation to create particle diversity.
+    // TODO finish me
     for (docIdx <- 0 to docWords.size-1) {
       val words = docWords(docIdx)
       for (wordIdx <- 0 to words.size-1) {
-        val topicIdx = //TODO
-        rejuvSeq.addItem(new DocumentToken(docIdx, words(wordIdx)))
+        rejuvSeq.addItem(
+          new ParticleStore.DocumentToken(docIdx, wordIdx, words(wordIdx)))
       }
     }
   }
@@ -170,10 +174,6 @@ class ParticleStore (val T: Int, val alpha: Double, val beta: Double,
           particles(indexOfParticleToCopy).copy(newIdx)
     }
     resampledParticles
-  }
-
-  override def toString (): String = {
-    particles(0).docAssgs(0).mkString(" ")
   }
 }
 
@@ -289,6 +289,7 @@ class AssignmentStore () {
  space of a particular run of LDA. */
 class AssignmentMap () {
   //particleId -> docId for reservoir sampler -> word idx -> topic assignments
+  // TODO turn into list of pairs?
   var assgMap = HashMap[Int,HashMap[Int,HashMap[Int,Int]]]()
 
   /** Checks to see if a particle contains a topic assignment for some word in
@@ -348,7 +349,7 @@ class AssignmentMap () {
  basically determine what the run of LDA does next. */
 class Particle (val topics: Int, val initialWeight: Double,
                 val alpha: Double, val beta: Double,
-                val rejuvSeq: ReservoirSampler[Array[String]],
+                val rejuvSeq: ReservoirSampler[ParticleStore.DocumentToken],
                 var assgStore: AssignmentStore, val particleId: Int) {
   /* NOTE: `rejuvSeq` depends on the PfLda class to populate it with the
    documents that it will use for rejuvenation; it DEPENDS ON SIDE-EFFECTS to
@@ -356,11 +357,12 @@ class Particle (val topics: Int, val initialWeight: Double,
   var globalVect = new GlobalUpdateVector(topics)
   var weight = initialWeight
   var currDocVect = new DocumentUpdateVector(topics)
-  var rejuvSeqDocVects = Array[DocumentUpdateVector] = Array.fill(rejuvSeq.capacity)(null)
+  var rejuvSeqDocVects: Array[DocumentUpdateVector] =
+    Array.fill(rejuvSeq.capacity)(null)
   var docLabels = ArrayBuffer[Int]()  // labels for all the documents
   var rsIdxToLabelsIdx: Array[Int] = Array.fill(rejuvSeq.capacity)(0)
   var nextDocId = 0
-  var nextRsIdx = 0
+  var nextTokenIdx = 0
 
   def clearAssignments =
     assgStore.clearParticle(particleId)
@@ -373,11 +375,10 @@ class Particle (val topics: Int, val initialWeight: Double,
 
     // Store doc vects, set random topic assignments
     for (wordIdx <- 0 to doc.size-1) {
-      rejuvSeqDocVects(nextRsIdx) = currDocVect
+      rejuvSeqDocVects(nextTokenIdx) = currDocVect
       // TODO does it make sense to even do this?
-      //rsIdxToLabelsIdx(nextRsIdx) = nextDocId
-      //nextDocId += 1
-      nextRsIdx += 1
+      rsIdxToLabelsIdx(nextTokenIdx) = nextDocId
+      nextTokenIdx += 1
 
       val word = doc(wordIdx)
       val sampledTopic = Stats.sampleInt(topics)
@@ -392,7 +393,8 @@ class Particle (val topics: Int, val initialWeight: Double,
       if (currDocVect.timesTopicOccursInDoc(t) > mx)
         mx = t
     }
-    docLabels(nextDocId - 1) = mx
+    docLabels(nextDocId) = mx
+    nextDocId += 1
   }
 
   /** Generates an unnormalized weight for the particle; returns new wgt. NOTE:
@@ -411,8 +413,7 @@ class Particle (val topics: Int, val initialWeight: Double,
    Behind the scenes, this requires two updates: first, we must update the
    global and document-specific update vectors, and then we must update the
    topic assignments if this document happens to be in our reservoir. */
-  def transition (idx: Int, words: Array[String], w: Int, docIdx: Int): Int = {
-    val word = words(idx)
+  def transition (wordIdx: Int, word: String, w: Int, docIdx: Int): Int = {
     val cdf = updatePosterior(word, w)
     val sampledTopic = Stats.sampleCategorical(cdf)
     globalVect.update(word, sampledTopic)
@@ -433,40 +434,37 @@ class Particle (val topics: Int, val initialWeight: Double,
     sampledTopic
   }
 
-  def newDocumentUpdate (indexIntoSample: Int, doc: Array[String]): Unit = {
+  def newDocumentUpdate (tokenIdx: Int, doc: Array[String]): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
-    if (indexIntoSample != Constants.DidNotAddToSampler) {
-      assgStore.newDocument(particleId, indexIntoSample, doc, topics,
+    if (tokenIdx != Constants.DidNotAddToSampler) {
+      assgStore.newDocument(particleId, tokenIdx, doc, topics,
                           globalVect, currDocVect)
-      rejuvSeqDocVects(indexIntoSample) = currDocVect
+      rejuvSeqDocVects(tokenIdx) = currDocVect
     }
 
     docLabels += -1
     // this will be used to update counts of the document as we go
-    if (indexIntoSample != Constants.DidNotAddToSampler) {
-      rsIdxToLabelsIdx(indexIntoSample) = nextDocId
-    }
+    if (tokenIdx != Constants.DidNotAddToSampler)
+      rsIdxToLabelsIdx(tokenIdx) = nextDocId
 
     nextDocId += 1
   }
 
   /** Rejuvenates particle by MCMC.
    w is the *current* size of the vocabulary */
-  def rejuvenate (wordIds: Array[(Int,Int)], batchSize: Int, mcmcSteps: Int,
-      w: Int): Unit = {
+  def rejuvenate (tokenIds: Array[Int], mcmcSteps: Int, w: Int): Unit = {
     for (i <- 0 to mcmcSteps-1)
-      wordIds.foreach{ wordId => resampleRejuvSeqWord(wordId._1, wordId._2, w) }
+      tokenIds.foreach{ tokenIdx => resampleRejuvSeqWord(tokenIdx, w) }
   }
 
   /** Resamples a word in the rejuvenation sequence; w is *current* size of
    vocabulary*/
-  def resampleRejuvSeqWord (docIdx: Int, wordIdx: Int, w: Int): Unit = {
-    val doc = rejuvSeq(docIdx)
-    val word = doc(wordIdx)
-    val cdf = incrementalPosterior(wordIdx, docIdx, w)
+  def resampleRejuvSeqWord (tokenIdx: Int, w: Int): Unit = {
+    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
+    val cdf = incrementalPosterior(tokenIdx, w)
     val sampledTopic = Stats.sampleCategorical(cdf)
 
-    assignNewTopic(docIdx, wordIdx, sampledTopic)
+    assignNewTopic(tokenIdx, sampledTopic)
   }
 
   /** Proper deep copy of the particle */
@@ -479,34 +477,33 @@ class Particle (val topics: Int, val initialWeight: Double,
     copiedParticle.currDocVect = currDocVect.copy
     assgStore.newParticle(newAssgStoreId, particleId)
     // copy rejuvSeqDocVects
-    for (rsIdx <- 0 to rejuvSeqDocVects.size-1) {
-      if (rejuvSeqDocVects(rsIdx) == tmpCurrDocVect)
-        copiedParticle.rejuvSeqDocVects(rsIdx) = copiedParticle.currDocVect
-      else
-        copiedParticle.rejuvSeqDocVects(rsIdx) = rejuvSeqDocVects(rsIdx).copy()
+    for (tokenIdx <- 0 to rejuvSeqDocVects.size-1) {
+      copiedParticle.rejuvSeqDocVects(tokenIdx) =
+        if (rejuvSeqDocVects(tokenIdx) == tmpCurrDocVect)
+          copiedParticle.currDocVect
+        else
+          rejuvSeqDocVects(tokenIdx).copy
     }
     for (e <- docLabels)
       copiedParticle.docLabels += e
-    for (rsIdx <- 0 to rsIdxToLabelsIdx.size-1)
-      copiedParticle.rsIdxToLabelsIdx(rsIdx) = rsIdxToLabelsIdx(rsIdx)
+    for (tokenIdx <- 0 to rsIdxToLabelsIdx.size-1)
+      copiedParticle.rsIdxToLabelsIdx(tokenIdx) = rsIdxToLabelsIdx(tokenIdx)
     copiedParticle.nextDocId = nextDocId
     copiedParticle
   }
 
   /** Assigns new topics to RESAMPLED words */
-  private def assignNewTopic (docIdx: Int, wordIdx: Int, newTopic: Int):
-  Unit = {
+  private def assignNewTopic(tokenIdx: Int, newTopic: Int) = {
+    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
     val oldTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
-    var docUpdateVect = rejuvSeqDocVects(docIdx)
-    val doc = rejuvSeq.getSampleSet()(docIdx)
-    val word = doc(wordIdx)
+    var docUpdateVect = rejuvSeqDocVects(tokenIdx)
     // should use indices to decrement old topic counts?
     globalVect.resampledUpdate(word, oldTopic, newTopic)
     docUpdateVect.resampledUpdate(wordIdx, oldTopic, newTopic)
     assgStore.resampledSetTopic(particleId, docIdx, wordIdx, newTopic)
 
     // set document label if it changes
-    val labelId = rsIdxToLabelsIdx(docIdx)
+    val labelId = rsIdxToLabelsIdx(tokenIdx)
     var mx = 0
     for (t <- 0 until topics) {
       if (docUpdateVect.timesTopicOccursInDoc(t) > mx)
@@ -537,11 +534,10 @@ class Particle (val topics: Int, val initialWeight: Double,
    distribution P(z_j|Z_{i\j}, w_i); w is *current* size of the vocabulary.
    This normalized distribution is a distribution over all possible z_j in eqn
    3 in Canini et al "Online Inference of Topics ..." */
-  private def incrementalPosterior (wordIdx: Int, docId:Int,
-                                    w: Int): Array[Double] = {
+  private def incrementalPosterior (tokenIdx: Int, w: Int): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
     (0 to topics-1)foreach { i =>
-      unnormalizedCdf(i) = incrementalEqn(wordIdx, docId, i, w) }
+      unnormalizedCdf(i) = incrementalEqn(tokenIdx, i, w) }
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
@@ -561,51 +557,28 @@ class Particle (val topics: Int, val initialWeight: Double,
   /** For some word and some `topic`, calculates number proportional to
    p(z_j|Z_{i\j}, W_i). this is given as eqn (3) in Canini et al "Online
    Inference of Topics..." */
-  private def incrementalEqn (wordIdx: Int, docId: Int, topic: Int,
-                              w: Int): Double = {
-    // We want to count the number of times a topic has occurred EXCLUDING the
-    // current time it was assigned. This method just helps that goal.
-    def counterHelper (count: Int, targetTopic: Int): Int = {
-      if (targetTopic == topic) Math.max(count - 1, 0)
+  private def incrementalEqn (tokenIdx: Int, topic: Int, w: Int): Double = {
+    // Return the count, less one if priorTopic is the same as topic
+    // (but never return less than zero).
+    def counterHelper (count: Int, priorTopic: Int): Int =
+      if (priorTopic == topic) Math.max(count - 1, 0)
       else count
-    }
-    val doc = rejuvSeq.getSampleSet()(docId)
-    val word = doc(wordIdx)
-    val priorTopic = assgStore.getTopic(particleId, docId, wordIdx)
-    val docVect = rejuvSeqDocVects(docId)
+
+    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
+    val priorTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
+    val docVect = rejuvSeqDocVects(tokenIdx)
+
     val globalUpdate =
       (counterHelper(globalVect.numTimesWordAssignedTopic(word, topic),
                      priorTopic) + beta) /
-    (counterHelper(globalVect.numTimesTopicAssignedTotal(topic),
-                   priorTopic) + w * beta)
-
+      (counterHelper(globalVect.numTimesTopicAssignedTotal(topic),
+                     priorTopic) + w * beta)
     val docUpdate =
       (counterHelper(docVect.numTimesTopicOccursInDoc(topic),
                      priorTopic) + alpha) /
-    (Math.max(docVect.wordsInDoc - 1, 0) + topics * alpha)
+      (Math.max(docVect.wordsInDoc - 1, 0) + topics * alpha)
+
     globalUpdate * docUpdate
-  }
-
-  def docAssgs (docIdx: Int): Array[Int] = {
-    val assgs = new Array[Int](rejuvSeqDocVects(docIdx).wordsInDoc)
-    for (i <- 0 to assgs.size-1) {
-      assgs(i) = assgStore.getTopic(particleId, docIdx, i)
-    }
-    assgs
-  }
-
-  /** Note that docId is the index into the reservoir sampler! */
-  def docAssgsToArray(docId: Int, length: Int): Array[Int] = {
-    var a = new Array[Int](length)
-    for (i <- 0 until length)
-      a(i) = assgStore.getTopic(particleId, docId, i)
-    a
-  }
-
-  override def toString(): String = {
-    var s = "particle: "
-    rejuvSeqDocVects.foreach { dv => s += docAssgs(dv).deep.mkString(" ") }
-    s
   }
 }
 

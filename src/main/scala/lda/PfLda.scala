@@ -9,6 +9,8 @@ import globals.Constants
 import stream._
 import wrangle._
 
+// TODO newDocumentUpdate* needs to go
+
 /** Particle filter-based Gibbs sampler for LDA.
  *
  * @param T Number of topics
@@ -28,7 +30,7 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
   var currVocabSize = 0
   var currWordIdx = 0
   var particles: ParticleStore
-  var rejuvSeq: ReservoirSampler[DocumentToken]
+  var rejuvSeq: ReservoirSampler[ParticleStore.DocumentToken]
 
   private def simpleFilter (str: String): Boolean = {
     val patt = new Regex("\\W");
@@ -46,8 +48,6 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
       newDocumentUpdateInitial(docIdx, initWords(docIdx))
 
     particles.initialize(initWords, mcmcSteps, currVocabSize)
-
-    // TODO clean p 0, clone p 0, rejuv/resample step
   }
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
@@ -79,56 +79,39 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
 
   /** Process the ith entry in `words`; copied pretty much verbatim from
    Algorithm 4 of Canini, et al "Online Inference of Topics..." */
-  private def processWord (i: Int, words: Array[String], docId: Int): Unit = {
+  private def processWord (i: Int, words: Array[String], docIdx: Int) = {
     val currword = words(i)
     addWordIfNotSeen(currword) // side-effects; must be before particle updates!
     currWordIdx += 1
 
     // TODO why reweight before transition?
     particles.unnormalizedReweightAll(currword, currVocabSize)
-    particles.transitionAll(i, words, currVocabSize, docId)
+    particles.transitionAll(i, words, currVocabSize, docIdx)
     particles.normalizeWeights()
 
     if (particles.shouldRejuvenate()) {
       println("REJUVENATE " + currWordIdx)
-      particles.rejuvenate(allWordIds(docId, i+1), currVocabSize)
+      particles.rejuvenate((0 to rejuvSeq.occupied-1).toArray, currVocabSize)
     }
   }
 
-  private def newDocumentUpdate (doc: Array[String]): Int = {
-    val index = rejuvSeq.addItem(doc)
-    particles.newDocumentUpdateAll(index, doc)
-    if (index != Constants.DidNotAddToSampler)
-      println("RESERVOIRADD " + index)
-    index
+  private def newDocumentUpdate(docIdx: Int, doc: Array[String]): Int = {
+    for (wordIdx <- 0 to doc.size-1)
+      rejuvSeq.addItem(
+        new ParticleStore.DocumentToken(docIdx, wordIdx, doc(wordIdx)))
+
+    particles.newDocumentUpdateAll(docIdx, doc)
+    if (docIdx != Constants.DidNotAddToSampler)
+      println("RESERVOIRADD " + docIdx)
+    docIdx
   }
 
   private def newDocumentUpdateInitial(docIdx: Int, doc: Array[String]) = {
-    for (word <- doc)
-      rejuvSeq.addItem(new DocumentToken(docIdx, word))
+    for (wordIdx <- 0 to doc.size-1)
+      rejuvSeq.addItem(
+        new ParticleStore.DocumentToken(docIdx, wordIdx, doc(wordIdx)))
 
     particles.newDocumentUpdateInitial(docIdx, doc)
-  }
-
-  /** Array of wordIds; a word's id is a tuple (docId, wordIndex), where `docId`
-   tells us where in `rejuvSeq` our document is, and `wordIndex`, which tells us
-   where in that document our word is */
-  private def allWordIds (currDocIdx: Int, numWordsProcessed: Int): Array[(Int,Int)] = {
-    val sample = rejuvSeq.getSampleSet
-    val wordsInSample = sample.foldLeft(0){ (acc, doc) => acc + doc.length }
-    val numWordsUnprocessed =
-      if (currDocIdx == Constants.DidNotAddToSampler) 0
-      else sample(currDocIdx).length - numWordsProcessed
-    var wordIds = new Array[(Int,Int)](wordsInSample - numWordsUnprocessed)
-    var currIdx = 0
-    for (i <- 0 to sample.length-1) {
-      val lim = if (i == currDocIdx) numWordsProcessed else sample(i).length
-      for (j <- 0 to lim-1) {
-        wordIds(currIdx) = (i,j)
-        currIdx += 1
-      }
-    }
-    wordIds
   }
 
   /** Adds `word` to the current vocab map if not seen; uses current
