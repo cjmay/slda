@@ -92,11 +92,11 @@ object RunLda {
                           Sim3PfParams.rejuvMcmcSteps)
 
     model.initialize(
-      (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_).toArray),
+      (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_)).toArray,
       Sim3PfParams.initialBatchMcmcSteps)
 
     println("running model...")
-    for (i <- initialBatchSize to corpus.length-1) {
+    for (i <- Sim3PfParams.initialBatchSize to corpus.length-1) {
       println("DOCUMENT " + i + " / " + corpus.length)
       //val now = System.nanoTime
       model.ingestDoc(corpus(i))

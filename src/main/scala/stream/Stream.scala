@@ -16,13 +16,14 @@ import globals.Constants
  * example, often produces an associative array of randomly sampled elements,
  * in random order.
  */
-abstract class AssociativeStreamSampler[T] () {
-  def add (item: T): AssociativeStreamSampler[T]
-  def addAll (items: Array[T]): AssociativeStreamSampler[T]
-  def capacity (): Int // total number of slots availble in sampler
-  def occupied (): Int // total number of slots occupied in sampler
-  def apply (i: Int): T
-  def getSampleSet (): Array[T]
+abstract class AssociativeStreamSampler[T] {
+  def add(item: T): AssociativeStreamSampler[T]
+  def addAll(items: Array[T]): AssociativeStreamSampler[T]
+  def capacity: Int // total number of slots availble in sampler
+  def occupied: Int // total number of slots occupied in sampler
+  def apply(i: Int): T
+  def getSampleSet: Array[T]
+  def reset(newK: Int): Unit
 }
 
 /** Mapping stream samplers are backed by a map or hash table, and thus their
@@ -30,13 +31,14 @@ abstract class AssociativeStreamSampler[T] () {
  * problem, for example, will return a map of elements that are believed to have
  * occurred more than k times.
  */
-abstract class MappingStreamSampler[T] () {
-  def add (item: T): MappingStreamSampler[T]
-  def addAll (items: Array[T]): MappingStreamSampler[T]
-  def capacity (): Int // total number of slots availble in sampler
-  def occupied (): Int // total number of slots occupied in sampler
-  def apply (item: T): Int
-  def getSampleSet (): Map[T, Int]
+abstract class MappingStreamSampler[T] {
+  def add(item: T): MappingStreamSampler[T]
+  def addAll(items: Array[T]): MappingStreamSampler[T]
+  def capacity: Int // total number of slots availble in sampler
+  def occupied: Int // total number of slots occupied in sampler
+  def apply(item: T): Int
+  def getSampleSet: Map[T, Int]
+  def reset(newK: Int): Unit
 }
 
 /** Simple implementation of reservoir sampling.
@@ -46,21 +48,28 @@ abstract class MappingStreamSampler[T] () {
  *
  * WARNING: HIGHLY STATEFUL
  */
-class ReservoirSampler[T: Manifest] (k: Int) extends
-AssociativeStreamSampler[T] () {
+class ReservoirSampler[T: Manifest](tempK: Int) extends
+AssociativeStreamSampler[T] {
+  var k = tempK
   var sample = new Array[T](k)
   var currIdx = 0
   var randombits = new Random()
 
+  def reset(newK: Int): Unit = {
+    sample = new Array[T](newK)
+    k = newK
+    currIdx = 0
+  }
+
   /** Add returns a ReservoirSampler so we can chain `add` calls together */
-  def add (item: T): ReservoirSampler[T] = {
+  def add(item: T): ReservoirSampler[T] = {
     addItem(item)
     this
   }
 
   /** Add returns index of its place in reservoir, returns
    `DidNotAddToSampler` if we did not place it in the reservoir. */
-  def addItem (item: T): Int = {
+  def addItem(item: T): Int = {
     var slotToReplace = Constants.DidNotAddToSampler
     if (currIdx >= k) {
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
@@ -76,12 +85,12 @@ AssociativeStreamSampler[T] () {
     slotToReplace
   }
 
-  def addAll (items: Array[T]): ReservoirSampler[T] = {
+  def addAll(items: Array[T]): ReservoirSampler[T] = {
     items.foreach { item => add(item) }
     this
   }
 
-  def apply (i: Int): T = {
+  def apply(i: Int): T = {
     if (i >= currIdx)
       throw new RuntimeException("reservoir sample hasn't seen " + i +
                                  " objects yet!")
@@ -90,7 +99,7 @@ AssociativeStreamSampler[T] () {
 
   /** Output an array with all the elements in the sample; ie, if our sample
    has < k elements in it, we only output the elements we have */
-  def getSampleSet (): Array[T] = {
+  def getSampleSet: Array[T] = {
     if (currIdx < k) {
       var out = new Array[T](currIdx)
       Array.copy(sample, 0, out, 0, currIdx)
@@ -100,14 +109,14 @@ AssociativeStreamSampler[T] () {
   }
 
   /** Capacity of sampler, ie, maximum number of slots available total */
-  def capacity () = k
+  def capacity() = k
 
   /** Number of elemtents in reservoir */
-  def occupied () =
+  def occupied() =
     if (currIdx >= k) k
     else currIdx
 
-  override def toString(): String = getSampleSet.deep.mkString(" ")
+  override def toString: String = getSampleSet.deep.mkString(" ")
 }
 
 /** Implements the Misra-Gries Frequent algorithm for the heavy hitters problem.
@@ -117,28 +126,34 @@ AssociativeStreamSampler[T] () {
  *
  * WARNING: HIGHLY STATEFUL
  */
-class FrequentSampler[T: Manifest] (k: Int) extends
-MappingStreamSampler[T] () {
+class FrequentSampler[T: Manifest](tempK: Int) extends
+MappingStreamSampler[T] {
+  var k = tempK
   var sample = Map[T, Int]()
   
-  def add (item: T): FrequentSampler[T] = {
+  def reset(newK: Int): Unit = {
+    sample = Map[T, Int]()
+    k = newK
+  }
+
+  def add(item: T): FrequentSampler[T] = {
     if (sample.contains(item))
       sample += item -> (sample(item) + 1)
     else if (sample.size < k)
       sample += item -> 1
     else {
-      for ((k,v) <- sample) {
-        if (v == 1) sample -= k
-        else sample += k -> (v - 1)
+      for ((key,value) <- sample) {
+        if (value == 1) sample -= key
+        else sample += key -> (value - 1)
       }
     }
 
     this
   }
   
-  def addAll (items: Array[T]): FrequentSampler[T] = {
+  def addAll(items: Array[T]): FrequentSampler[T] = {
     @tailrec
-    def loop (i: Int): Unit = {
+    def loop(i: Int): Unit = {
       if (i >= items.length) Unit
       else {
         add(items(i))
@@ -149,14 +164,14 @@ MappingStreamSampler[T] () {
     this
   }
   
-  def apply (item: T): Int =
+  def apply(item: T): Int =
     if (sample contains item) sample(item)
     else 0
   
-  def getSampleSet (): Map[T, Int] = sample
+  def getSampleSet: Map[T, Int] = sample
   
-  def capacity (): Int = k
-  def occupied (): Int = sample.size
+  def capacity: Int = k
+  def occupied: Int = sample.size
 }
 
 /** Implements the SpaceSaving algorithm for the heavy hitters problem.
@@ -166,11 +181,17 @@ MappingStreamSampler[T] () {
  *
  * WARNING: HIGHLY STATEFUL
  */
-class SpaceSavingSampler[T: Manifest] (k: Int) extends
-MappingStreamSampler[T] () {
+class SpaceSavingSampler[T: Manifest](tempK: Int) extends
+MappingStreamSampler[T] {
+  var k = tempK
   var sample = Map[T, Int]()
   
-  def add (item: T): SpaceSavingSampler[T] = {
+  def reset(newK: Int): Unit = {
+    sample = Map[T, Int]()
+    k = newK
+  }
+
+  def add(item: T): SpaceSavingSampler[T] = {
     if (sample.contains(item))
       sample += item -> (sample(item) + 1)
     else if (sample.size < k)
@@ -184,9 +205,9 @@ MappingStreamSampler[T] () {
     this
   }
   
-  def addAll (items: Array[T]): SpaceSavingSampler[T] = {
+  def addAll(items: Array[T]): SpaceSavingSampler[T] = {
     @tailrec
-    def loop (i: Int): Unit = {
+    def loop(i: Int): Unit = {
       if (i >= items.length) Unit
       else {
         add(items(i))
@@ -197,11 +218,11 @@ MappingStreamSampler[T] () {
     this
   }
   
-  def apply (item: T): Int =
+  def apply(item: T): Int =
     if (sample contains item) sample(item)
     else 0
   
-  def getSampleSet (): Map[T, Int] = sample
-  def capacity (): Int = k
-  def occupied (): Int = sample.size
+  def getSampleSet: Map[T, Int] = sample
+  def capacity: Int = k
+  def occupied: Int = sample.size
 }
