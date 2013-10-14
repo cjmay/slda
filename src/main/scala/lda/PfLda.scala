@@ -61,7 +61,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   def ingestDoc(doc: String): Int = {
     val words = makeBOW(doc)
 
-    val docIdx = newDocumentUpdate()
+    val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
     (0 to words.length-1).foreach{ i => processWord(i, words, docIdx) }
     if (words.length != 0) {
@@ -92,12 +92,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
         currVocabSize)
     }
   }
-
-  /** Inform particle store we will be moving on to a new document,
-    * return new document idx
-    */
-  private def newDocumentUpdate(): Int =
-    particles.newDocumentUpdateAll()
 
   /** Adds `word` to the current vocab map if not seen; uses current
     * currVocabSize as the id, i.e., if `word` is the nth seen so far,

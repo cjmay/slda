@@ -59,10 +59,21 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
 
   /** Transition every particle (see Particle.transition(...)) */
   def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
-                    docIdx: Int): Unit =
-    particles.foreach { p =>
-      p.transition(wordIdx, word, currVocabSize, docIdx)
+                    docIdx: Int): Unit = {
+    val token = new Particle.DocumentToken(docIdx, wordIdx, word)
+    val (tokenIdx, replacedToken) = rejuvSeq.addItem(token)
+        if (tokenIdx != Constants.DidNotAddToSampler) {
+          println(replacedToken._1 + ", " + replacedToken._2 + ": " + tokenIdx + " -> ()")
+          println(docIdx + ", " + wordIdx + ": () -> " + tokenIdx)
+        }
+    if (tokenIdx != Constants.DidNotAddToSampler) {
+      val (oldDocIdx, oldWordIdx, oldWord) = replacedToken
+      assgStore.removeAll(oldDocIdx, oldWordIdx)
     }
+    particles.foreach { p =>
+      p.transition(tokenIdx, token, currVocabSize)
+    }
+  }
 
   /** Inform each particle we will be moving on to a new document */
   def newDocumentUpdateAll(): Int = {
@@ -118,56 +129,75 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
                  currVocabSize: Int, reservoirSize: Int): Unit = {
+    println("initializing model in batch mode over " + docs.size + " documents")
     // Add initial tokens to reservoir
     val p = particles(0)
     val allTokenIds = (0 to docs.size-1).map({docIdx =>
       val doc = docs(docIdx)
       val tokenIds = (0 to doc.size-1).map({wordIdx =>
         rejuvSeq.addItem(
-          new Particle.DocumentToken(docIdx, wordIdx, doc(wordIdx)))
+          new Particle.DocumentToken(docIdx, wordIdx, doc(wordIdx)))._1
       }).toArray
       p.newDocumentUpdateInitial(docIdx, tokenIds, doc)
       tokenIds
     }).toArray
 
     // Do initial batch iterations
+    println("* beginning batch iterations")
     p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
 
     // Prepare for particle filtering
+    println("transitioning to particle filter mode")
 
     // TODO: what if new reservoir size > initial reservoir size?
     // Reset reservoir to non-trivial size
+    println("* resetting reservoir")
     rejuvSeq.reset(reservoirSize)
     // Re-add documents to reservoir (some will be rejected)
-    val rejuvSeqMap: Array[Int] =
-      Array.fill(reservoirSize)(Constants.DidNotAddToSampler)
-    var removedTokens: List[(Int,Int)] = List.empty
+    println("* adding documents to resetted reservoir")
+    val rejuvSeqMap: HashMap[Int,Int] = HashMap.empty
+    var removedTokens: List[Particle.DocumentToken] = List.empty
     for (docIdx <- 0 to docs.size-1) {
       val words = docs(docIdx)
       val oldTokenIds = allTokenIds(docIdx)
       for (wordIdx <- 0 to words.size-1) {
         val oldTokenIdx = oldTokenIds(wordIdx)
-        val newTokenIdx = rejuvSeq.addItem(
-          new Particle.DocumentToken(docIdx, wordIdx, words(wordIdx)))
-        if (newTokenIdx == Constants.DidNotAddToSampler)
-          removedTokens = (docIdx, wordIdx) +: removedTokens
-        else
+        val newToken =
+          new Particle.DocumentToken(docIdx, wordIdx, words(wordIdx))
+        val (newTokenIdx, oldToken) = rejuvSeq.addItem(newToken)
+        // TODO what if we eject something we previously added?
+        if (newTokenIdx == Constants.DidNotAddToSampler) {
+          println(docIdx + ", " + wordIdx + ": " + oldTokenIdx + " -> ()")
+          removedTokens = newToken +: removedTokens
+        } else {
+          println(docIdx + ", " + wordIdx + ": " + oldTokenIdx + " -> " + newTokenIdx)
           rejuvSeqMap(newTokenIdx) = oldTokenIdx
+        }
       }
     }
+    // Update document counter
+    println("* updating document counter")
+    currDocIdx += docs.size
     // Inform particle 0 of new reservoir
+    println("* propagating reservoir reset")
     p.remapRejuvSeq(rejuvSeqMap)
-    // Clone particle 0 to other particles
-    for (particleNum <- 1 to numParticles-1)
+    // Remove elements from assignment store that were removed from
+    // reservoir
+    println("* removing stale tokens from assignment store")
+    for ((docIdx, wordIdx, word) <- removedTokens) {
+      println(docIdx + ", " + wordIdx + " -> ()")
+      assgStore.removeAll(docIdx, wordIdx)
+    }
+    assgStore.prune()
+    // Clone particle 0 to create new particle set
+    println("* cloning batch particle")
+    for (particleNum <- 0 to numParticles-1)
       particles(particleNum) = p.copy(newParticleId())
     // Rejuvenate to create particle diversity
+    println("* rejuvenating all particles")
     val newTokenIds = (0 to reservoirSize-1).toArray
     rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
-    // Remove elements from assignment store that were removed from
-    // reservoir
-    for ((docIdx, wordIdx) <- removedTokens)
-      assgStore.remove(docIdx, wordIdx)
   }
 
   /** Helper method puts the weights of particles into an array, so that
@@ -230,27 +260,22 @@ class AssignmentStore {
    should always find it at the root, and if we don't then something has gone
    wrong. */
   @tailrec
-  final def getTopic(particleId: Int, docId: Int, wordIdx: Int): Int = {
+  final def getTopic(particleId: Int, docId: Int, wordIdx: Int): Int =
     // if word assigned topic in current particle, return.
     // else recurse upwards.
     // if no parent entry for particleId, then error out.
-    if (assgMap.wordChangedInParticle(particleId, docId, wordIdx)) {
-      return assgMap.getTopic(particleId, docId, wordIdx)
-    }
-    else {
-      return getTopic(parent(particleId), docId, wordIdx)
-    }
-  }
+    if (assgMap.wordChangedInParticle(particleId, docId, wordIdx))
+      assgMap.getTopic(particleId, docId, wordIdx)
+    else
+      getTopic(parent(particleId), docId, wordIdx)
 
   def clearParticle(particleId: Int) =
     assgMap.clearParticle(particleId)
 
   /** Checks to see if a particle contains a topic assignment for some word in
    some document */
-  def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int):
-  Boolean = {
+  def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int): Boolean =
     assgMap.wordChangedInParticle(particleId, docId, wordId)
-  }
 
   /** Sets topic assignment for word at location wordIdx in document docId.
    Additionally, the old value is inserted into the child particles to maintain
@@ -258,6 +283,8 @@ class AssignmentStore {
    they've already been set, for consistency! Unlike `get` the parent are NOT
    affected. */
   // TODO  tailrec?!
+  // TODO since we copy particles every time, it seems like we don't need
+  // all of this...
   def resampledSetTopic(particleId: Int, docId: Int, wordIdx: Int, topic: Int):
   Unit = {
     val oldTopic = getTopic(particleId, docId, wordIdx)
@@ -272,13 +299,11 @@ class AssignmentStore {
     }
   }
 
-  def setTopic(particleId: Int, docId: Int, wordIdx: Int, topic: Int):
-  Unit = {
+  def setTopic(particleId: Int, docId: Int, wordIdx: Int, topic: Int): Unit =
     assgMap.setTopic(particleId, docId, wordIdx, topic)
-  }
 
-  def remove(docIdx: Int, wordIdx: Int) =
-    assgMap.remove(docIdx, wordIdx)
+  def removeAll(docIdx: Int, wordIdx: Int) =
+    assgMap.removeAll(docIdx, wordIdx)
 
   /** Creates new topic assignment vector for document */
   def newDocument(particleId: Int, newDocIdx: Int): Unit =
@@ -299,12 +324,14 @@ class AssignmentStore {
     parent(particleId) = parentId
   }
 
-  // TODO why no-op?!
   /** Deletes or merges nodes that are "inactive." A node is inactive if it is
    no particle has copied it during the resampling step. If an entire subtree
    is inactive, then it can be deleted. If a node is inactive, but has active
    children, then it can be merged with the children.*/
-  def prune(): Unit = { }
+  def prune(): Unit = {
+    assgMap.prune()
+    // TODO
+  }
 }
 
 /** Map from a (particle, document, word) -> topic -- that is, a map from a
@@ -322,12 +349,10 @@ class AssignmentMap {
   /** Checks to see if a particle contains a topic assignment for some
     * word in some document
     */
-  def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int):
-  Boolean = {
+  def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int): Boolean =
     assgMap.contains(particleId) &&
-    assgMap(particleId).contains(docId) &&
-    assgMap(particleId)(docId).contains(wordId)
-  }
+      assgMap(particleId).contains(docId) &&
+      assgMap(particleId)(docId).contains(wordId)
 
   def clearParticle(particleId: Int) =
     assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
@@ -336,9 +361,8 @@ class AssignmentMap {
     * returns None if there is no such word in that document of that
     * particle
     */
-  def getTopic(particleId: Int, docId: Int, wordId: Int): Int = {
+  def getTopic(particleId: Int, docId: Int, wordId: Int): Int =
     assgMap(particleId)(docId)(wordId)
-  }
 
   /** Sets topic for a word in a document.
 
@@ -348,20 +372,25 @@ class AssignmentMap {
    when the child is modified and therefore different from the parent. `wordId`
    will usually not be in the map for similar reasons. This method must add
    both of these things */
-  def setTopic(particleId: Int, docId: Int, wordId: Int, topic: Int) = {
+  def setTopic(particleId: Int, docId: Int, wordId: Int, topic: Int): Unit =
+    // TODO so is newDoc and all that work I just did pointless?
     if (!assgMap(particleId).contains(docId))
       assgMap(particleId)(docId) = HashMap[Int,Int](wordId -> topic)
     else
       assgMap(particleId)(docId)(wordId) = topic
-  }
 
-  def remove(docIdx: Int, wordIdx: Int) =
-    for (particleMap <- assgMap.values) {
-      val docMap = particleMap(docIdx)
-      docMap -= wordIdx
-      if (docMap.isEmpty)
+  def removeAll(docIdx: Int, wordIdx: Int): Unit =
+    for (particleMap <- assgMap.values)
+      if (particleMap contains docIdx) {
+        val docMap = particleMap(docIdx)
+        if (docMap contains wordIdx)
+          docMap -= wordIdx
+      }
+
+  def prune(): Unit = 
+    for (particleMap <- assgMap.values; docIdx <- particleMap.keysIterator)
+      if (particleMap(docIdx).isEmpty)
         particleMap -= docIdx
-    }
 
   /** Builds new representation of topic assignments */
   def newDoc(particleId: Int, docIdx: Int): Unit =
@@ -388,8 +417,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   var globalVect = new GlobalUpdateVector(topics)
   var weight = initialWeight
   var currDocVect = new DocumentUpdateVector(topics)
-  var rejuvSeqDocVects: Array[DocumentUpdateVector] =
-    Array.fill(rejuvSeq.capacity)(null)
+  var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
   var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty // TODO
 
   /** Update data structures for a new rejuvenation sequence that is
@@ -397,8 +425,10 @@ class Particle(val topics: Int, val initialWeight: Double,
     * rejuvenation sequence positions to old rejuvenation sequence
     * positions.
     */
-  def remapRejuvSeq(rejuvSeqMap: Array[Int]): Unit =
-    rejuvSeqDocVects = rejuvSeqMap.map(rejuvSeqDocVects(_)).toArray
+  def remapRejuvSeq(rejuvSeqMap: HashMap[Int,Int]): Unit =
+    rejuvSeqDocVects = rejuvSeqMap.map({ kv =>
+      kv._1 -> rejuvSeqDocVects(kv._2)
+    })
 
   /** Create pointers and data structures for new document and
     * initialize all topic assignments to random.
@@ -437,15 +467,11 @@ class Particle(val topics: Int, val initialWeight: Double,
     * we must update the topic assignments if this document happens to
     * be in our reservoir.
     */
-  def transition(wordIdx: Int, word: String, currVocabSize: Int,
-                 docIdx: Int): Int = {
-    val tokenIdx = rejuvSeq.addItem(
-      new Particle.DocumentToken(docIdx, wordIdx, word))
-
-    if (tokenIdx != Constants.DidNotAddToSampler) {
-      assgStore.remove(docIdx, wordIdx)
+  def transition(tokenIdx: Int, token: Particle.DocumentToken,
+                 currVocabSize: Int): Int = {
+    val (docIdx, wordIdx, word) = token
+    if (tokenIdx != Constants.DidNotAddToSampler)
       rejuvSeqDocVects(tokenIdx) = currDocVect
-    }
 
     val cdf = updatePosterior(word, currVocabSize)
     val sampledTopic = Stats.sampleCategorical(cdf)
@@ -493,14 +519,10 @@ class Particle(val topics: Int, val initialWeight: Double,
     val tmpCurrDocVect = currDocVect
     copiedParticle.currDocVect = currDocVect.copy
     assgStore.newParticle(newParticleId, particleId)
-    // copy rejuvSeqDocVects
-    for (tokenIdx <- 0 to rejuvSeqDocVects.size-1) {
-      copiedParticle.rejuvSeqDocVects(tokenIdx) =
-        if (rejuvSeqDocVects(tokenIdx) == tmpCurrDocVect)
-          copiedParticle.currDocVect
-        else
-          rejuvSeqDocVects(tokenIdx).copy
-    }
+    copiedParticle.rejuvSeqDocVects = rejuvSeqDocVects.map({ kv =>
+      kv._1 -> (if (kv._2 == tmpCurrDocVect) copiedParticle.currDocVect
+                else kv._2.copy)
+    })
     copiedParticle
   }
 

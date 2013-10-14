@@ -69,20 +69,26 @@ AssociativeStreamSampler[T] {
 
   /** Add returns index of its place in reservoir, returns
    `DidNotAddToSampler` if we did not place it in the reservoir. */
-  def addItem(item: T): Int = {
+  def addItem(item: T): (Int,T) = {
+    var replacedElement: T = item
     var slotToReplace = Constants.DidNotAddToSampler
+
     if (currIdx >= k) {
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
       slotToReplace = randombits.nextInt(currIdx+1)
-      if (slotToReplace < k) sample(slotToReplace) = item
-      else slotToReplace = Constants.DidNotAddToSampler
+      if (slotToReplace < k) {
+        replacedElement = sample(slotToReplace)
+        sample(slotToReplace) = item
+      } else {
+        slotToReplace = Constants.DidNotAddToSampler
+      }
     } else {
       sample(currIdx) = item
       slotToReplace = currIdx
     }
     
     currIdx += 1
-    slotToReplace
+    (slotToReplace, replacedElement)
   }
 
   def addAll(items: Array[T]): ReservoirSampler[T] = {

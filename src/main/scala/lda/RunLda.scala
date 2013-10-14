@@ -8,19 +8,19 @@ import wrangle._
 object Sim3PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 1768 // number of documents (total: 1768)
+  val reservoirSize = 176//8 // number of documents (total: 1768)
   val numParticles = 100
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
-  val initialBatchSize = 177
+  val initialBatchSize = 17//7
   val initialBatchMcmcSteps = 2000
 }
 
 object Rel3PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 1575 // number of documents (total: 1575)
+  val reservoirSize = 1575 // number of documents (total: 1575)
   val numParticles = 100
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
@@ -32,7 +32,7 @@ object Rel3PfParams {
 object Diff3PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 1670 // number of documents (total: 1670)
+  val reservoirSize = 1670 // number of documents (total: 1670)
   val numParticles = 100
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
@@ -44,7 +44,7 @@ object Diff3PfParams {
 object Subset20PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
+  val reservoirSize = 0 // number of documents
   val numParticles = 100
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
@@ -56,7 +56,7 @@ object Subset20PfParams {
 object Slash6PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
+  val reservoirSize = 0 // number of documents
   val numParticles = 100
   val ess = 10 // effective sample size threshold
   val rejuvBatchSize = 10 // |R(i)|
@@ -68,7 +68,7 @@ object Slash6PfParams {
 object Slash7PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
+  val reservoirSize = 0 // number of documents
   val numParticles = 100
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
@@ -81,21 +81,23 @@ object RunLda {
   def main (args: Array[String]) {
     println("loading corpus...")
     var (corpus, labels, cats) = wrangle.TNG.sim3
-    // if we don't shuffle them, and if we don't shuffle them with the same seed,
-    // our NMI suffers greatly
+    // if we don't shuffle them, and if we don't shuffle them with the
+    // same seed, our NMI suffers greatly
     corpus = (new Random(10)).shuffle(corpus.toSeq).toArray
     labels = (new Random(10)).shuffle(labels.toSeq).toArray
     println("building model...")
     val model = new PfLda(cats, Sim3PfParams.alpha, Sim3PfParams.beta,
-                          Sim3PfParams.smplSize, Sim3PfParams.numParticles,
+                          Sim3PfParams.reservoirSize, Sim3PfParams.numParticles,
                           Sim3PfParams.ess, Sim3PfParams.rejuvBatchSize,
                           Sim3PfParams.rejuvMcmcSteps)
 
+    // TODO: batch size: documents...? not tokens?
+    println("initializing...")
     model.initialize(
       (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_)).toArray,
       Sim3PfParams.initialBatchMcmcSteps)
 
-    println("running model...")
+    println("running particle filter...")
     for (i <- Sim3PfParams.initialBatchSize to corpus.length-1) {
       println("DOCUMENT " + i + " / " + corpus.length)
       //val now = System.nanoTime
