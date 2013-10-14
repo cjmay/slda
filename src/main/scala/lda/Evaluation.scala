@@ -12,7 +12,7 @@ import lda._
 
 object Evaluation {
   def mi (ourLabels: ArrayBuffer[Int], theirLabels: Array[String],
-          topics: Int, theirLabelTypes: Collection[String]):
+          topics: Int, theirLabelTypes: Iterable[String]):
   Double = {
     val n = ourLabels.length.toDouble
     var s = 0.0
@@ -34,7 +34,7 @@ object Evaluation {
   }
 
   def entropies (ourLabels: ArrayBuffer[Int], theirLabels: Array[String],
-                 topics: Int, theirLabelTypes: Collection[String]):
+                 topics: Int, theirLabelTypes: Iterable[String]):
   Double = {
     val n = ourLabels.length.toDouble
     var ent1 = 0.0
@@ -55,7 +55,7 @@ object Evaluation {
   }
 
   def nmi (model: PfLda, labels: Array[String],
-           labelTypes: Collection[String]): Array[Double] = {
+           labelTypes: Iterable[String]): Array[Double] = {
     val ntopics = model.T
     val ps = model.particles
     val ourLabels = ps.particles.map { p => p.docLabels }
@@ -66,7 +66,7 @@ object Evaluation {
   }
 
   def writeOut (model: PfLda, labels: Array[String],
-                labelTypes: Collection[String], filename: String): Unit = {
+                labelTypes: Iterable[String], filename: String): Unit = {
     val nmis = nmi(model, labels, labelTypes)
     val writer = new PrintWriter(new File(filename))
 
