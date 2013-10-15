@@ -310,10 +310,6 @@ class AssignmentStore {
   def removeAll(docIdx: Int, wordIdx: Int) =
     assgMap.removeAll(docIdx, wordIdx)
 
-  /** Creates new topic assignment vector for document */
-  def newDocument(particleId: Int, newDocIdx: Int): Unit =
-    assgMap.newDoc(particleId, newDocIdx)
-
   /** Creates new particle.
 
    If parent node exists, set its children to include current node. Always set
@@ -378,7 +374,6 @@ class AssignmentMap {
    will usually not be in the map for similar reasons. This method must add
    both of these things */
   def setTopic(particleId: Int, docId: Int, wordId: Int, topic: Int): Unit =
-    // TODO so is newDoc and all that work I just did pointless?
     if (!assgMap(particleId).contains(docId))
       assgMap(particleId)(docId) = HashMap[Int,Int](wordId -> topic)
     else
@@ -396,10 +391,6 @@ class AssignmentMap {
     for (particleMap <- assgMap.values; docIdx <- particleMap.keysIterator)
       if (particleMap(docIdx).isEmpty)
         particleMap -= docIdx
-
-  /** Builds new representation of topic assignments */
-  def newDoc(particleId: Int, docIdx: Int): Unit =
-    assgMap(particleId)(docIdx) = HashMap[Int,Int]()
 
   def newParticle(particleId: Int): Unit =
     assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
@@ -443,7 +434,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     val docVect = new DocumentUpdateVector(topics)
     for (tokenIdx <- tokenIds)
       rejuvSeqDocVects(tokenIdx) = docVect
-    assgStore.newDocument(particleId, docIdx)
 
     // Set random initial topic assignments
     for (wordIdx <- 0 to doc.size-1) {
@@ -492,7 +482,6 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Create pointers and data structures for new document */
   def newDocumentUpdate(docIdx: Int): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
-    assgStore.newDocument(particleId, docIdx)
   }
 
   /** Rejuvenate particle by MCMC, using specified tokens as
