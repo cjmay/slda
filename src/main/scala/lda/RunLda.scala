@@ -8,12 +8,12 @@ import wrangle._
 object Sim3PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val reservoirSize = 100000 // reservoir size in tokens
+  val reservoirSize = 1768 // reservoir size in tokens
   val numParticles = 100
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
-  val initialBatchSize = 50 // number of docs for batch MCMC init
+  val initialBatchSize = 177 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 2000
 }
 

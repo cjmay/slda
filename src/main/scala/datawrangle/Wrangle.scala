@@ -148,6 +148,30 @@ object TNG {
      DataConsts.SIM_3_CATS)
   }
 
+  def rel3 () = {
+    val c1 = Io.rawCorpus(wrangle.DataConsts.REL_3_TRAIN_DOCS(0))
+    val l1 = Array.fill(c1.length){ wrangle.DataConsts.REL_3_LABELS(0) }
+    val c2 = Io.rawCorpus(wrangle.DataConsts.REL_3_TRAIN_DOCS(1))
+    val l2 = Array.fill(c2.length){ wrangle.DataConsts.REL_3_LABELS(1) }
+    val c3 = Io.rawCorpus(wrangle.DataConsts.REL_3_TRAIN_DOCS(2))
+    val l3 = Array.fill(c3.length){ wrangle.DataConsts.REL_3_LABELS(2) }
+    (c1 ++ c2 ++ c3,
+     l1 ++ l2 ++ l3,
+     DataConsts.REL_3_CATS)
+  }
+
+  def diff3 () = {
+    val c1 = Io.rawCorpus(wrangle.DataConsts.DIFF_3_TRAIN_DOCS(0))
+    val l1 = Array.fill(c1.length){ wrangle.DataConsts.DIFF_3_LABELS(0) }
+    val c2 = Io.rawCorpus(wrangle.DataConsts.DIFF_3_TRAIN_DOCS(1))
+    val l2 = Array.fill(c2.length){ wrangle.DataConsts.DIFF_3_LABELS(1) }
+    val c3 = Io.rawCorpus(wrangle.DataConsts.DIFF_3_TRAIN_DOCS(2))
+    val l3 = Array.fill(c3.length){ wrangle.DataConsts.DIFF_3_LABELS(2) }
+    (c1 ++ c2 ++ c3,
+     l1 ++ l2 ++ l3,
+     DataConsts.DIFF_3_CATS)
+  }
+
   /*
   def main (args: Array[String]) {
     val corpus = Io.rawCorpus(DataConsts.ALT_ATHEISM)
