@@ -254,6 +254,12 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
  * create reference to a new particle and change its assignments as necessary.
  * Thus, looking up a particle, we need only recurse up the parents until we
  * find the assignment we're looking for.
+ *
+ * There is one key difference between our implementation and that of
+ * Canini et al.: when we resample, we create P clones from the previous
+ * particle set.  That is, we create P *new* particles.  Thus only leaf
+ * particles are ever active, so we never have to worry about updating
+ * a particle's children when one of its topic assignments changes.
  */
 class AssignmentStore {
   var assgMap = new AssignmentMap()
@@ -281,28 +287,6 @@ class AssignmentStore {
    some document */
   def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int): Boolean =
     assgMap.wordChangedInParticle(particleId, docId, wordId)
-
-  /** Sets topic assignment for word at location wordIdx in document docId.
-   Additionally, the old value is inserted into the child particles to maintain
-   consistency. Note that the old value should be set in the children, unless
-   they've already been set, for consistency! Unlike `get` the parent are NOT
-   affected. */
-  // TODO  tailrec?!
-  // TODO since we copy particles every time, it seems like we don't need
-  // all of this...
-  def resampledSetTopic(particleId: Int, docId: Int, wordIdx: Int, topic: Int):
-  Unit = {
-    val oldTopic = getTopic(particleId, docId, wordIdx)
-    if (oldTopic != topic) {
-      if (children contains particleId) {
-        for (childId <- children(particleId)) {
-          if (! wordChangedInParticle(childId, docId, wordIdx))
-            resampledSetTopic(childId, docId, wordIdx, oldTopic)
-        }
-      }
-      assgMap.setTopic(particleId, docId, wordIdx, topic)
-    }
-  }
 
   def setTopic(particleId: Int, docId: Int, wordIdx: Int, topic: Int): Unit =
     assgMap.setTopic(particleId, docId, wordIdx, topic)
@@ -480,9 +464,8 @@ class Particle(val topics: Int, val initialWeight: Double,
   }
 
   /** Create pointers and data structures for new document */
-  def newDocumentUpdate(docIdx: Int): Unit = {
+  def newDocumentUpdate(docIdx: Int): Unit =
     currDocVect = new DocumentUpdateVector(topics)
-  }
 
   /** Rejuvenate particle by MCMC, using specified tokens as
     * rejuvenation sequence and iterating for mcmcSteps.
@@ -527,7 +510,7 @@ class Particle(val topics: Int, val initialWeight: Double,
     val docVect = rejuvSeqDocVects(tokenIdx)
     globalVect.resampledUpdate(word, oldTopic, newTopic)
     docVect.resampledUpdate(oldTopic, newTopic)
-    assgStore.resampledSetTopic(particleId, docIdx, wordIdx, newTopic)
+    assgStore.setTopic(particleId, docIdx, wordIdx, newTopic)
   }
 
   /** Results in a number proportional to P(w_i|z_{i-1}, w_{i-1});
