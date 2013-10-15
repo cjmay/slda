@@ -12,6 +12,8 @@ object Particle {
   type DocumentToken = Triple[Int,Int,String]
 }
 
+// TODO get rid of docIdx, not truly streaming...
+
 /** A memory- and time-efficient way to represent particles, as detailed
   * in section 4 of Canini Shi Griffiths. Manages all the logic of
   * particle manipulation, copying, reading, etc
