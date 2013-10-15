@@ -13,7 +13,7 @@ object Sim3PfParams {
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
-  val initialBatchSize = 10 // number of docs for batch MCMC init
+  val initialBatchSize = 177 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 2000
 }
 
