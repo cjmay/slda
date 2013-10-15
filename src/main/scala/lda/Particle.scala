@@ -13,6 +13,7 @@ object Particle {
 }
 
 // TODO get rid of docIdx, not truly streaming...
+// TODO docLabels is a disaster
 
 /** A memory- and time-efficient way to represent particles, as detailed
   * in section 4 of Canini Shi Griffiths. Manages all the logic of
@@ -144,6 +145,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     // Do initial batch iterations
     println("* beginning batch iterations")
     p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    p.setRejuvSeqDocLabels()
 
     // Prepare for particle filtering
     println("transitioning to particle filter mode")
@@ -534,12 +536,28 @@ class Particle(val topics: Int, val initialWeight: Double,
     if (tokenIdx != Constants.DidNotAddToSampler)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
 
+    docLabels(docIdx) = docLabel(currDocVect) // TODO ugly
     sampledTopic
   }
 
+  def setRejuvSeqDocLabels(): Unit = {
+    // TODO also ugly
+    for (tokenIdx <- 0 until rejuvSeq.occupied)
+      docLabels.append(docLabel(rejuvSeqDocVects(tokenIdx)))
+  }
+
+  def docLabel(docVect: DocumentUpdateVector): Int = {
+    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
+    (0 until topics).reduce({(t1, t2) =>
+      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
+    })
+  }
+
   /** Create pointers and data structures for new document */
-  def newDocumentUpdate(docIdx: Int): Unit =
+  def newDocumentUpdate(docIdx: Int): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
+    docLabels.append(docLabel(currDocVect)) // TODO ugly
+  }
 
   /** Rejuvenate particle by MCMC, using specified tokens as
     * rejuvenation sequence and iterating for mcmcSteps.
@@ -559,6 +577,8 @@ class Particle(val topics: Int, val initialWeight: Double,
     val sampledTopic = Stats.sampleCategorical(cdf)
 
     assignNewTopic(tokenIdx, sampledTopic)
+    if (docIdx < docLabels.size) // TODO ugly
+      docLabels(docIdx) = docLabel(rejuvSeqDocVects(tokenIdx))
   }
 
   /** Proper deep copy of the particle */
@@ -569,6 +589,9 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle.weight = weight
     val tmpCurrDocVect = currDocVect
     copiedParticle.currDocVect = currDocVect.copy
+    copiedParticle.docLabels = new ArrayBuffer[Int]()
+    for (label <- docLabels)
+      copiedParticle.docLabels.append(label)
     assgStore.newParticle(newParticleId, particleId)
     copiedParticle.rejuvSeqDocVects = rejuvSeqDocVects.map({ kv =>
       kv._1 -> (if (kv._2 == tmpCurrDocVect) copiedParticle.currDocVect
