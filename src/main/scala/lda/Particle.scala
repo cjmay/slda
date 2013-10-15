@@ -62,10 +62,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
                     docIdx: Int): Unit = {
     val token = new Particle.DocumentToken(docIdx, wordIdx, word)
     val (tokenIdx, wasEjected, ejectedToken) = rejuvSeq.addItem(token)
-        if (tokenIdx != Constants.DidNotAddToSampler) {
-          println(ejectedToken._1 + ", " + ejectedToken._2 + ": " + tokenIdx + " -> ()")
-          println(docIdx + ", " + wordIdx + ": () -> " + tokenIdx)
-        }
     if (tokenIdx != Constants.DidNotAddToSampler) {
       val (oldDocIdx, oldWordIdx, oldWord) = ejectedToken
       assgStore.removeAll(oldDocIdx, oldWordIdx)
@@ -193,10 +189,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     // Remove elements from assignment store that were removed from
     // reservoir
     println("* removing stale tokens from assignment store")
-    for ((docIdx, wordIdx, word) <- removedTokens) {
-      println(docIdx + ", " + wordIdx + " -> ()")
+    for ((docIdx, wordIdx, word) <- removedTokens)
       assgStore.removeAll(docIdx, wordIdx)
-    }
     assgStore.prune()
 
     // Clone particle 0 to create new particle set
