@@ -12,8 +12,7 @@ object Particle {
   type DocumentToken = Triple[Int,Int,String]
 }
 
-// TODO get rid of docIdx, not truly streaming...
-// TODO docLabels is a disaster
+// TODO get rid of docIdx, docLabels (not truly streaming)
 
 /** A memory- and time-efficient way to represent particles, as detailed
   * in section 4 of Canini Shi Griffiths. Manages all the logic of
@@ -23,8 +22,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
                     val numParticles: Int, val ess: Double,
                     val rejuvBatchSize: Int, val rejuvMcmcSteps: Int,
                     var rejuvSeq: ReservoirSampler[Particle.DocumentToken]) {
-  var currParticleId = 0 // NOTE: This must come before initParticles,
-                         // otherwise it resets the id count
+  var currParticleId = -1 // NOTE: This must come before initParticles,
+                          // otherwise it resets the id count
   var currDocIdx = -1
   var (assgStore,particles) = initParticles()
 
@@ -78,7 +77,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   def newDocumentUpdateAll(): Int = {
     currDocIdx += 1
     particles.foreach { p =>
-      p.newDocumentUpdate(currDocIdx)
+      p.newDocumentUpdate()
     }
     currDocIdx
   }
@@ -129,7 +128,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
                  currVocabSize: Int, reservoirSize: Int): Unit = {
-    println("initializing model in batch mode over " + docs.size + " documents")
+    println("* initializing model using MCMC over " + docs.size + " documents")
+
     // Add initial tokens to reservoir
     val p = particles(0)
     val allTokenIds = (0 to docs.size-1).map({docIdx =>
@@ -143,19 +143,14 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    println("* beginning batch iterations")
     p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
-    p.setRejuvSeqDocLabels()
 
-    // Prepare for particle filtering
-    println("transitioning to particle filter mode")
+    println("* transitioning to particle filter")
 
     // Reset reservoir to non-trivial size
-    println("* resetting reservoir")
     rejuvSeq.reset(reservoirSize)
 
     // Re-add documents to reservoir (some will be rejected)
-    println("* adding documents to reset reservoir")
     val newToOldRejuvSeqMap: HashMap[Int,Int] = HashMap.empty
     var removedTokens: List[Particle.DocumentToken] = List.empty
     for (docIdx <- 0 to docs.size-1) {
@@ -184,27 +179,22 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }
 
     // Update document counter
-    println("* updating document counter")
     currDocIdx += docs.size // currDocIdx == -1 before this update
 
     // Inform particle 0 of new reservoir
-    println("* propagating reservoir reset")
     p.remapRejuvSeq(newToOldRejuvSeqMap)
 
     // Remove elements from assignment store that were removed from
     // reservoir
-    println("* removing stale tokens from assignment store")
     for ((docIdx, wordIdx, word) <- removedTokens)
       assgStore.removeAll(docIdx, wordIdx)
 
     // Clone particle 0 to create new particle set
-    println("* cloning batch particle")
     particles = (0 to numParticles-1).toArray.map({
       i => p.copy(newParticleId())
     })
 
     // Rejuvenate to create particle diversity
-    println("* rejuvenating all particles")
     val newTokenIds = (0 to rejuvSeq.occupied-1).toArray
     rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
@@ -229,9 +219,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
    (or when you set the assignment), this id tells the store which particle to
    do the lookup in. */
   private def newParticleId(): Int = {
-    val newid = currParticleId
     currParticleId += 1
-    newid
+    currParticleId
   }
 
   /** Creates an array of particles resampled proportional to the weights */
@@ -472,7 +461,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   var weight = initialWeight
   var currDocVect = new DocumentUpdateVector(topics)
   var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
-  var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty // TODO
+  var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty
 
   def id: Int = particleId
 
@@ -503,6 +492,9 @@ class Particle(val topics: Int, val initialWeight: Double,
       docVect.update(sampledTopic)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
     }
+
+    // Set default doc label
+    docLabels.append(0)
   }
 
   /** Generates an unnormalized weight for the particle; returns new
@@ -536,14 +528,8 @@ class Particle(val topics: Int, val initialWeight: Double,
     if (tokenIdx != Constants.DidNotAddToSampler)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
 
-    docLabels(docIdx) = docLabel(currDocVect) // TODO ugly
+    docLabels(docIdx) = docLabel(currDocVect)
     sampledTopic
-  }
-
-  def setRejuvSeqDocLabels(): Unit = {
-    // TODO also ugly
-    for (tokenIdx <- 0 until rejuvSeq.occupied)
-      docLabels.append(docLabel(rejuvSeqDocVects(tokenIdx)))
   }
 
   def docLabel(docVect: DocumentUpdateVector): Int = {
@@ -554,9 +540,9 @@ class Particle(val topics: Int, val initialWeight: Double,
   }
 
   /** Create pointers and data structures for new document */
-  def newDocumentUpdate(docIdx: Int): Unit = {
+  def newDocumentUpdate(): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
-    docLabels.append(docLabel(currDocVect)) // TODO ugly
+    docLabels.append(0) // Set default doc label
   }
 
   /** Rejuvenate particle by MCMC, using specified tokens as
@@ -577,8 +563,7 @@ class Particle(val topics: Int, val initialWeight: Double,
     val sampledTopic = Stats.sampleCategorical(cdf)
 
     assignNewTopic(tokenIdx, sampledTopic)
-    if (docIdx < docLabels.size) // TODO ugly
-      docLabels(docIdx) = docLabel(rejuvSeqDocVects(tokenIdx))
+    docLabels(docIdx) = docLabel(rejuvSeqDocVects(tokenIdx))
   }
 
   /** Proper deep copy of the particle */
@@ -589,9 +574,7 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle.weight = weight
     val tmpCurrDocVect = currDocVect
     copiedParticle.currDocVect = currDocVect.copy
-    copiedParticle.docLabels = new ArrayBuffer[Int]()
-    for (label <- docLabels)
-      copiedParticle.docLabels.append(label)
+    copiedParticle.docLabels = docLabels.clone
     assgStore.newParticle(newParticleId, particleId)
     copiedParticle.rejuvSeqDocVects = rejuvSeqDocVects.map({ kv =>
       kv._1 -> (if (kv._2 == tmpCurrDocVect) copiedParticle.currDocVect

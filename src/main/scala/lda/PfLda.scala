@@ -26,14 +26,15 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
   var vocab: HashSet[String] = HashSet.empty
   var currTokenNum = -1 // Just used for diagnostics
-  var particles: ParticleStore = null // TODO ugly
-  var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null // TODO ugly
+  var particles: ParticleStore = null
+  var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
 
   private def simpleFilter(str: String): Boolean = {
     val patt = new Regex("\\W");
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
   }
 
+  /** Must be called before ingestDoc/ingestDocs */
   def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
     vocab ++= docsTokens.flatten.toStream

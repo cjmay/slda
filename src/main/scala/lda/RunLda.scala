@@ -8,12 +8,12 @@ import wrangle._
 object Sim3PfParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val reservoirSize = 1768 // reservoir size in tokens
+  val reservoirSize = 100000 // reservoir size in tokens
   val numParticles = 100
   val ess = 20 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
-  val initialBatchSize = 177 // number of docs for batch MCMC init
+  val initialBatchSize = 50 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 2000
 }
 
@@ -85,7 +85,8 @@ object RunLda {
     // same seed, our NMI suffers greatly
     corpus = (new Random(10)).shuffle(corpus.toSeq).toArray
     labels = (new Random(10)).shuffle(labels.toSeq).toArray
-    println("building model...")
+
+    println("initializing model...")
     val model = new PfLda(cats, Sim3PfParams.alpha, Sim3PfParams.beta,
                           Sim3PfParams.reservoirSize, Sim3PfParams.numParticles,
                           Sim3PfParams.ess, Sim3PfParams.rejuvBatchSize,
@@ -93,7 +94,6 @@ object RunLda {
 
     // TODO: batch size: documents...? not tokens?
     // TODO: what if batch size is bigger than corpus?
-    println("initializing...")
     model.initialize(
       (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_)).toArray,
       Sim3PfParams.initialBatchMcmcSteps)
@@ -105,7 +105,7 @@ object RunLda {
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))
-      if (i % 100 == 0) {
+      if (i % 10 == 0) {
         Evaluation.writeOut(model, labels.slice(0, i),
                             DataConsts.SIM_3_LABELS.slice(0, i),
                             DataConsts.RESULTS_DIR +  i.toString() + ".txt")
