@@ -92,11 +92,17 @@ object RunLda {
                           Sim3PfParams.ess, Sim3PfParams.rejuvBatchSize,
                           Sim3PfParams.rejuvMcmcSteps)
 
+    val evaluate = (docIdx: Int) =>
+      Evaluation.writeOut(model, labels.slice(0, docIdx+1),
+                          DataConsts.SIM_3_LABELS.slice(0, docIdx+1),
+                          DataConsts.RESULTS_DIR +  docIdx.toString() + ".txt")
+
     // TODO: batch size: documents...? not tokens?
     // TODO: what if batch size is bigger than corpus?
     model.initialize(
       (0 to Sim3PfParams.initialBatchSize-1).map(corpus(_)).toArray,
-      Sim3PfParams.initialBatchMcmcSteps)
+      Sim3PfParams.initialBatchMcmcSteps,
+      evaluate)
 
     println("running particle filter...")
     for (i <- Sim3PfParams.initialBatchSize to corpus.length-1) {
@@ -105,11 +111,8 @@ object RunLda {
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))
-      if (i % 10 == 0) {
-        Evaluation.writeOut(model, labels.slice(0, i),
-                            DataConsts.SIM_3_LABELS.slice(0, i),
-                            DataConsts.RESULTS_DIR +  i.toString() + ".txt")
-      }
+      if (i % 100 == 0)
+        evaluate(i)
     }
     model.writeTopics("results.txt")
 

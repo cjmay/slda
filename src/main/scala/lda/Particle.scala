@@ -117,7 +117,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
                     currVocabSize: Int): Unit =
     particles.foreach { p =>
       val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
-      p.rejuvenate(sample, mcmcSteps, currVocabSize)
+      p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {})
     }
 
   /** Run batch MCMC on specified docs to initialize model parameters.
@@ -127,7 +127,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * update data structures to prepare for particle filtering.
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
-                 currVocabSize: Int, reservoirSize: Int): Unit = {
+                 currVocabSize: Int, reservoirSize: Int,
+                 evaluate: (Int) => Unit): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
     // Add initial tokens to reservoir
@@ -143,7 +144,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize, evaluate)
 
     println("* transitioning to particle filter")
 
@@ -549,11 +550,13 @@ class Particle(val topics: Int, val initialWeight: Double,
     * rejuvenation sequence and iterating for mcmcSteps.
     */
   def rejuvenate(tokenIds: Array[Int], mcmcSteps: Int,
-                 currVocabSize: Int): Unit = {
-    for (i <- 1 to mcmcSteps)
+                 currVocabSize: Int, evaluate: (Int) => Unit): Unit = {
+    for (i <- 1 to mcmcSteps) {
       tokenIds.foreach{ tokenIdx =>
         resampleRejuvSeqWord(tokenIdx, currVocabSize)
       }
+      evaluate(docLabels.size)
+    }
   }
 
   /** Resample a word in the rejuvenation sequence */

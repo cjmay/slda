@@ -35,7 +35,8 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   }
 
   /** Must be called before ingestDoc/ingestDocs */
-  def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
+  def initialize(docs: Array[String], mcmcSteps: Int,
+      evaluate: (Int) => Unit): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
     vocab ++= docsTokens.flatten.toStream
 
@@ -45,7 +46,8 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     particles = new ParticleStore(T, alpha, beta, numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
-    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize)
+    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
+      evaluate)
   }
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
