@@ -295,14 +295,25 @@ class AssignmentStore {
    current node's parents to parentId*/
   def newParticle(particleId: Int, parentId: Int): Unit = {
     assgMap.newParticle(particleId)
-    if (parentId != Constants.NoParent) {
-      if (children contains parentId)
-        children(parentId) = particleId :: children(parentId)
-      else
-        children(parentId) = List(particleId)
-    }
+    if (parentId != Constants.NoParent)
+      children(parentId) = particleId :: children(parentId)
     parent(particleId) = parentId
+    children(particleId) = List.empty
   }
+
+  @tailrec
+  private def origin(particleId: Int): Int =
+    if (parent.contains(particleId)) {
+      val parentId = parent(particleId)
+      if (parentId == Constants.NoParent) particleId
+      else origin(parentId)
+    } else {
+      Constants.NoParent
+    }
+
+  private def root: Int =
+    if (parent.isEmpty) Constants.NoParent
+    else origin(parent.iterator.next()._1)
 
   /** Deletes or merges nodes that are "inactive." A node is inactive if it is
    no particle has copied it during the resampling step. If an entire subtree
@@ -311,17 +322,49 @@ class AssignmentStore {
   def prune(inactiveParticleIds: Iterable[Int]): Unit = {
     for (particleId <- inactiveParticleIds)
       pruneIfLeaf(particleId)
+
     assgMap.prune()
+
+    merge()
+  }
+
+  def merge(): Unit = {
+    val rootParticleId = root
+    if (rootParticleId != Constants.NoParent)
+      mergeNodes(List(rootParticleId))
+  }
+
+  @tailrec
+  private def mergeNodes(particleIds: List[Int]): Unit = {
+    if (! particleIds.isEmpty) {
+      val particleId = particleIds.head
+      val childIdsToMerge = if (children(particleId).size == 1) {
+        val parentId = parent(particleId)
+        val childId = children(particleId).head
+        parent(childId) = parentId
+        if (parentId != Constants.DidNotAddToSampler)
+          children(parentId) = childId +:
+            children(parentId).filterNot(particleId == _)
+        assgMap.mergeOntoParent(childId, particleId)
+        children -= particleId
+        parent -= particleId
+        List(childId)
+      } else {
+        children(particleId)
+      }
+      mergeNodes(childIdsToMerge ++ particleIds.tail)
+    }
   }
 
   @tailrec
   private def pruneIfLeaf(particleId: Int): Unit =
-    if (!children.contains(particleId) || children(particleId).isEmpty) {
+    if (children(particleId).isEmpty) {
       assgMap.removeParticle(particleId)
       val parentId = parent(particleId)
-      if (children.contains(parentId)) // need this check in case parent dne
+      if (parentId != Constants.NoParent) {
         children(parentId) = children(parentId).filterNot(particleId == _)
-      pruneIfLeaf(parentId)
+        pruneIfLeaf(parentId)
+      }
     }
 }
 
@@ -373,6 +416,27 @@ class AssignmentMap {
         if (docMap contains wordIdx)
           docMap -= wordIdx
       }
+
+  def mergeOntoParent(particleId: Int, parentId: Int): Unit = {
+    val particleMap = assgMap(particleId)
+    val parentMap = assgMap(parentId)
+
+    for (docIdx <- parentMap.keysIterator) {
+      val parentDocMap = parentMap(docIdx)
+
+      if (particleMap.contains(docIdx)) {
+        val particleDocMap = particleMap(docIdx)
+
+        for (wordIdx <- parentDocMap.keysIterator)
+          if (! particleMap(docIdx).contains(wordIdx))
+            particleDocMap(wordIdx) = parentDocMap(wordIdx)
+      } else {
+        particleMap(docIdx) = parentDocMap
+      }
+    }
+
+    removeParticle(parentId)
+  }
 
   def prune(): Unit = 
     for (particleMap <- assgMap.values; docIdx <- particleMap.keysIterator)
