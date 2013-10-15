@@ -98,8 +98,9 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def resampleAndRejuvenate(tokenIds: Array[Int], currVocabSize: Int): Unit = {
     // resample particles and prune tree
+    val prevParticleIds = particles.map(_.id)
     resample(particleWeightArray)
-    assgStore.prune()
+    assgStore.prune(prevParticleIds)
 
     // pick rejuvenation sequence in the reservoir
     rejuvenateAll(tokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
@@ -191,12 +192,12 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     println("* removing stale tokens from assignment store")
     for ((docIdx, wordIdx, word) <- removedTokens)
       assgStore.removeAll(docIdx, wordIdx)
-    assgStore.prune()
 
     // Clone particle 0 to create new particle set
     println("* cloning batch particle")
-    for (particleNum <- 0 to numParticles-1)
-      particles(particleNum) = p.copy(newParticleId())
+    particles = (0 to numParticles-1).toArray.map({
+      i => p.copy(newParticleId())
+    })
 
     // Rejuvenate to create particle diversity
     println("* rejuvenating all particles")
@@ -233,14 +234,11 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   private def multinomialResample(unnormalizedWeights: Array[Double]):
   Array[Particle] = {
     val weightsCdf = Stats.normalizeAndMakeCdf(unnormalizedWeights)
-    val resampledParticles = new Array[Particle](numParticles)
-    (0 to numParticles-1).foreach {
+    (0 to numParticles-1).toArray.map({
       i =>
         val indexOfParticleToCopy = Stats.sampleCategorical(weightsCdf)
-        resampledParticles(i) =
-          particles(indexOfParticleToCopy).copy(newParticleId())
-    }
-    resampledParticles
+        particles(indexOfParticleToCopy).copy(newParticleId())
+    })
   }
 }
 
@@ -280,9 +278,6 @@ class AssignmentStore {
     else
       getTopic(parent(particleId), docId, wordIdx)
 
-  def clearParticle(particleId: Int) =
-    assgMap.clearParticle(particleId)
-
   /** Checks to see if a particle contains a topic assignment for some word in
    some document */
   def wordChangedInParticle(particleId: Int, docId: Int, wordId: Int): Boolean =
@@ -313,10 +308,21 @@ class AssignmentStore {
    no particle has copied it during the resampling step. If an entire subtree
    is inactive, then it can be deleted. If a node is inactive, but has active
    children, then it can be merged with the children.*/
-  def prune(): Unit = {
+  def prune(inactiveParticleIds: Iterable[Int]): Unit = {
+    for (particleId <- inactiveParticleIds)
+      pruneIfLeaf(particleId)
     assgMap.prune()
-    // TODO
   }
+
+  @tailrec
+  private def pruneIfLeaf(particleId: Int): Unit =
+    if (!children.contains(particleId) || children(particleId).isEmpty) {
+      assgMap.removeParticle(particleId)
+      val parentId = parent(particleId)
+      if (children.contains(parentId)) // need this check in case parent dne
+        children(parentId) = children(parentId).filterNot(particleId == _)
+      pruneIfLeaf(parentId)
+    }
 }
 
 /** Map from a (particle, document, word) -> topic -- that is, a map from a
@@ -338,9 +344,6 @@ class AssignmentMap {
     assgMap.contains(particleId) &&
       assgMap(particleId).contains(docId) &&
       assgMap(particleId)(docId).contains(wordId)
-
-  def clearParticle(particleId: Int) =
-    assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
 
   /** Queries particle for topic assignment of a word in document;
     * returns None if there is no such word in that document of that
@@ -378,6 +381,9 @@ class AssignmentMap {
 
   def newParticle(particleId: Int): Unit =
     assgMap(particleId) = HashMap[Int,HashMap[Int,Int]]()
+
+  def removeParticle(particleId: Int): Unit =
+    assgMap -= particleId
 }
 
 /** `Particle` is a sample from the space of possible states that a run of LDA
@@ -399,6 +405,8 @@ class Particle(val topics: Int, val initialWeight: Double,
   var currDocVect = new DocumentUpdateVector(topics)
   var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
   var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty // TODO
+
+  def id: Int = particleId
 
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new
