@@ -25,8 +25,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
             val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
   val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
   var vocab: HashSet[String] = HashSet.empty
-  var currVocabSize = 0
-  var currWordIdx = 0 // Just used for diagnostics (TODO ugly?)
+  var currTokenNum = -1 // Just used for diagnostics
   var particles: ParticleStore = null // TODO ugly
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null // TODO ugly
 
@@ -37,17 +36,15 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
   def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
-
-    for (doc <- docsTokens)
-      for (word <- doc)
-        addWordIfNotSeen(word)
+    vocab ++= docsTokens.flatten.toStream
 
     val totalNumTokens = docsTokens.map(_.size).sum
+    currTokenNum += totalNumTokens
     rejuvSeq = new ReservoirSampler(totalNumTokens)
     particles = new ParticleStore(T, alpha, beta, numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
-    particles.initialize(docsTokens, mcmcSteps, currVocabSize, reservoirSize)
+    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize)
   }
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
@@ -82,29 +79,18 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     */
   private def processWord(i: Int, words: Array[String], docIdx: Int): Unit = {
     val word = words(i)
-    addWordIfNotSeen(word) // side-effects; must be before particle updates!
-    currWordIdx += 1
+    vocab += word
+    currTokenNum += 1
 
     // TODO why reweight before transition?
-    particles.unnormalizedReweightAll(word, currVocabSize)
-    particles.transitionAll(i, words(i), currVocabSize, docIdx)
+    particles.unnormalizedReweightAll(word, vocab.size)
+    particles.transitionAll(i, words(i), vocab.size, docIdx)
     particles.normalizeWeights()
 
     if (particles.shouldResample) {
-      println("REJUVENATE " + currWordIdx)
+      println("REJUVENATE " + currTokenNum)
       particles.resampleAndRejuvenate((0 to rejuvSeq.occupied-1).toArray,
-        currVocabSize)
-    }
-  }
-
-  /** Adds `word` to the current vocab map if not seen; uses current
-    * currVocabSize as the id, i.e., if `word` is the nth seen so far,
-    * then n happens to be == currVocabSize
-    */
-  private def addWordIfNotSeen(word: String): Unit = {
-    if (!(vocab contains word)) {
-      vocab += word
-      currVocabSize += 1
+        vocab.size)
     }
   }
 
