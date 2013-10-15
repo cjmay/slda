@@ -61,13 +61,13 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
                     docIdx: Int): Unit = {
     val token = new Particle.DocumentToken(docIdx, wordIdx, word)
-    val (tokenIdx, replacedToken) = rejuvSeq.addItem(token)
+    val (tokenIdx, wasEjected, ejectedToken) = rejuvSeq.addItem(token)
         if (tokenIdx != Constants.DidNotAddToSampler) {
-          println(replacedToken._1 + ", " + replacedToken._2 + ": " + tokenIdx + " -> ()")
+          println(ejectedToken._1 + ", " + ejectedToken._2 + ": " + tokenIdx + " -> ()")
           println(docIdx + ", " + wordIdx + ": () -> " + tokenIdx)
         }
     if (tokenIdx != Constants.DidNotAddToSampler) {
-      val (oldDocIdx, oldWordIdx, oldWord) = replacedToken
+      val (oldDocIdx, oldWordIdx, oldWord) = ejectedToken
       assgStore.removeAll(oldDocIdx, oldWordIdx)
     }
     particles.foreach { p =>
@@ -149,38 +149,47 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     // Prepare for particle filtering
     println("transitioning to particle filter mode")
 
-    // TODO: what if new reservoir size > initial reservoir size?
     // Reset reservoir to non-trivial size
     println("* resetting reservoir")
     rejuvSeq.reset(reservoirSize)
+
     // Re-add documents to reservoir (some will be rejected)
-    println("* adding documents to resetted reservoir")
-    val rejuvSeqMap: HashMap[Int,Int] = HashMap.empty
+    println("* adding documents to reset reservoir")
+    val newToOldRejuvSeqMap: HashMap[Int,Int] = HashMap.empty
     var removedTokens: List[Particle.DocumentToken] = List.empty
     for (docIdx <- 0 to docs.size-1) {
       val words = docs(docIdx)
       val oldTokenIds = allTokenIds(docIdx)
       for (wordIdx <- 0 to words.size-1) {
-        val oldTokenIdx = oldTokenIds(wordIdx)
+        // Create token and try to add to reservoir
         val newToken =
           new Particle.DocumentToken(docIdx, wordIdx, words(wordIdx))
-        val (newTokenIdx, oldToken) = rejuvSeq.addItem(newToken)
-        // TODO what if we eject something we previously added?
+        val (newTokenIdx, wasEjected, ejectedToken) = rejuvSeq.addItem(newToken)
+
+        // If we don't add a token to the reset reservoir, or if we
+        // eject a token from the reset reservoir, add it to a list
+        // of removed tokens.  If we add a token to the reset
+        // reservoir, add an entry to our map (from the new reservoir
+        // indices to the old reservoir indices).
         if (newTokenIdx == Constants.DidNotAddToSampler) {
-          println(docIdx + ", " + wordIdx + ": " + oldTokenIdx + " -> ()")
           removedTokens = newToken +: removedTokens
         } else {
-          println(docIdx + ", " + wordIdx + ": " + oldTokenIdx + " -> " + newTokenIdx)
-          rejuvSeqMap(newTokenIdx) = oldTokenIdx
+          if (wasEjected)
+            removedTokens = ejectedToken +: removedTokens
+          val oldTokenIdx = oldTokenIds(wordIdx)
+          newToOldRejuvSeqMap(newTokenIdx) = oldTokenIdx
         }
       }
     }
+
     // Update document counter
     println("* updating document counter")
-    currDocIdx += docs.size
+    currDocIdx += docs.size // currDocIdx == -1 before this update
+
     // Inform particle 0 of new reservoir
     println("* propagating reservoir reset")
-    p.remapRejuvSeq(rejuvSeqMap)
+    p.remapRejuvSeq(newToOldRejuvSeqMap)
+
     // Remove elements from assignment store that were removed from
     // reservoir
     println("* removing stale tokens from assignment store")
@@ -189,13 +198,15 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
       assgStore.removeAll(docIdx, wordIdx)
     }
     assgStore.prune()
+
     // Clone particle 0 to create new particle set
     println("* cloning batch particle")
     for (particleNum <- 0 to numParticles-1)
       particles(particleNum) = p.copy(newParticleId())
+
     // Rejuvenate to create particle diversity
     println("* rejuvenating all particles")
-    val newTokenIds = (0 to reservoirSize-1).toArray
+    val newTokenIds = (0 to rejuvSeq.occupied-1).toArray
     rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
   }
@@ -425,8 +436,8 @@ class Particle(val topics: Int, val initialWeight: Double,
     * rejuvenation sequence positions to old rejuvenation sequence
     * positions.
     */
-  def remapRejuvSeq(rejuvSeqMap: HashMap[Int,Int]): Unit =
-    rejuvSeqDocVects = rejuvSeqMap.map({ kv =>
+  def remapRejuvSeq(newToOldRejuvSeqMap: HashMap[Int,Int]): Unit =
+    rejuvSeqDocVects = newToOldRejuvSeqMap.map({ kv =>
       kv._1 -> rejuvSeqDocVects(kv._2)
     })
 

@@ -1,7 +1,7 @@
 package lda
 
 import java.io.PrintWriter
-import scala.collection.mutable.{ HashMap => HashMap }
+import scala.collection.mutable.{ HashSet => HashSet }
 import scala.util.matching.Regex
 import scala.util.{ Random => Random }
 
@@ -24,9 +24,9 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
             val reservoirSize: Int, val numParticles: Int, ess: Double,
             val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
   val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
-  var vocabToId = HashMap[String,Int]()
+  var vocab: HashSet[String] = HashSet.empty
   var currVocabSize = 0
-  var currWordIdx = 0
+  var currWordIdx = 0 // Just used for diagnostics (TODO ugly?)
   var particles: ParticleStore = null // TODO ugly
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null // TODO ugly
 
@@ -37,6 +37,10 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
   def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
+
+    for (doc <- docsTokens)
+      for (word <- doc)
+        addWordIfNotSeen(word)
 
     val totalNumTokens = docsTokens.map(_.size).sum
     rejuvSeq = new ReservoirSampler(totalNumTokens)
@@ -77,12 +81,12 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * Algorithm 4 of Canini, et al "Online Inference of Topics..."
     */
   private def processWord(i: Int, words: Array[String], docIdx: Int): Unit = {
-    val currword = words(i)
-    addWordIfNotSeen(currword) // side-effects; must be before particle updates!
+    val word = words(i)
+    addWordIfNotSeen(word) // side-effects; must be before particle updates!
     currWordIdx += 1
 
     // TODO why reweight before transition?
-    particles.unnormalizedReweightAll(currword, currVocabSize)
+    particles.unnormalizedReweightAll(word, currVocabSize)
     particles.transitionAll(i, words(i), currVocabSize, docIdx)
     particles.normalizeWeights()
 
@@ -98,8 +102,8 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * then n happens to be == currVocabSize
     */
   private def addWordIfNotSeen(word: String): Unit = {
-    if (!(vocabToId contains word)) {
-      vocabToId(word) = currVocabSize
+    if (!(vocab contains word)) {
+      vocab += word
       currVocabSize += 1
     }
   }
@@ -107,7 +111,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   def writeTopics(filename: String): Unit = {
     Io.makeDirIfNE(DataConsts.RESULTS_DIR)
     println("WRITE TOPICS")
-    val wrdWIdx = vocabToId.toArray[(String,Int)]
     val particleObjs = particles.particles
     val pw = new PrintWriter(DataConsts.RESULTS_DIR + filename)
 
@@ -115,14 +118,12 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       pw.write("PARTICLE " + p + "\n")
       val countVctr = particleObjs(p).globalVect
       for (t <- 0 to T-1) {
-        val percs = new Array[(Double,String)](wrdWIdx.size)
-        for (i <- 0 to wrdWIdx.size-1) {
+        val percs: Array[(Double,String)] = vocab.toArray.map({ w =>
           // grab each word, compute how much it comprises a given topic
-          val (w,id) = wrdWIdx(i)
           val prctg = countVctr.numTimesWordAssignedTopic(w, t).toDouble /
             countVctr.numTimesTopicAssignedTotal(t)
-          percs(i) = (prctg, w);
-        }
+          (prctg, w)
+        })
         pw.write("topic " + t + "\n")
         pw.write("\t" + percs.sorted.reverse.deep.mkString("\n\t") + "\n")
       }
@@ -135,22 +136,18 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * topic
     */
   def printTopics: Unit = {
-    val wrdWIdx = vocabToId.toArray[(String,Int)]
     val particleObjs = particles.particles
-
 
     for (p <- 0 to particleObjs.length-1) {
       println("PARTICLE " + p)
       val countVctr = particleObjs(p).globalVect
       for (t <- 0 to T-1) {
-        val percs = new Array[(Double,String)](wrdWIdx.size)
-        for (i <- 0 to wrdWIdx.size-1) {
+        val percs: Array[(Double,String)] = vocab.toArray.map({ w =>
           // grab each word, compute how much it comprises a given topic
-          val (w,id) = wrdWIdx(i)
           val prctg = countVctr.numTimesWordAssignedTopic(w, t).toDouble /
             countVctr.numTimesTopicAssignedTotal(t)
-          percs(i) = (prctg, w);
-        }
+          (prctg, w)
+        })
         println("topic " + t)
         println("\t" + percs.sorted.reverse.deep.mkString("\n\t"))
       }

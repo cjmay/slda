@@ -67,28 +67,29 @@ AssociativeStreamSampler[T] {
     this
   }
 
-  /** Add returns index of its place in reservoir, returns
-   `DidNotAddToSampler` if we did not place it in the reservoir. */
-  def addItem(item: T): (Int,T) = {
-    var replacedElement: T = item
-    var slotToReplace = Constants.DidNotAddToSampler
-
-    if (currIdx >= k) {
+  /** Add item to reservoir and return triple containing index in
+    * reservoir (or `DidNotAddToSampler`), a boolean indicating whether
+    * an element was ejected from the reservoir, and the ejected
+    * element (or the item that was to be added)
+    */
+  def addItem(item: T): (Int,Boolean,T) = {
+    val triple = if (currIdx >= k) {
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
-      slotToReplace = randombits.nextInt(currIdx+1)
+      val slotToReplace = randombits.nextInt(currIdx+1)
       if (slotToReplace < k) {
-        replacedElement = sample(slotToReplace)
+        val ejectedElement = sample(slotToReplace)
         sample(slotToReplace) = item
+        (slotToReplace, true, ejectedElement)
       } else {
-        slotToReplace = Constants.DidNotAddToSampler
+        (Constants.DidNotAddToSampler, false, item)
       }
     } else {
       sample(currIdx) = item
-      slotToReplace = currIdx
+      (currIdx, false, item)
     }
     
     currIdx += 1
-    (slotToReplace, replacedElement)
+    triple
   }
 
   def addAll(items: Array[T]): ReservoirSampler[T] = {
