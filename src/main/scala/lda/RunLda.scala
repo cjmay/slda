@@ -98,7 +98,7 @@ object RunLda {
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))
-      if (i % 100 == 0)
+      if (i % 10 == 0)
         evaluate(i)
     }
     model.writeTopics("results.txt")
