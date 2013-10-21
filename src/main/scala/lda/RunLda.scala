@@ -81,7 +81,7 @@ object RunLda {
 
     val evaluate = (docIdx: Int) =>
       Evaluation.writeOut(model, labels.slice(0, docIdx+1),
-                          params.labelTypes.slice(0, docIdx+1),
+                          params.labelTypes,
                           DataConsts.RESULTS_DIR +  docIdx.toString() + ".txt")
 
     // TODO: batch size: documents...? not tokens?
