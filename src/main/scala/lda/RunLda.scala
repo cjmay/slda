@@ -78,7 +78,7 @@ object RunLda {
     val evaluate = (docIdx: Int) =>
       Evaluation.writeOut(model, labels.slice(0, docIdx+1),
                           params.cats,
-                          DataConsts.RESULTS_DIR +  docIdx.toString() + ".txt")
+                          DataConsts.RESULTS_DIR + docIdx.toString() + ".txt")
 
     // TODO: batch size: documents...? not tokens?
     // TODO: what if batch size is bigger than corpus?
@@ -94,7 +94,7 @@ object RunLda {
       model.ingestDoc(corpus(i))
       // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
       //println(i + " " + (System.nanoTime - now))
-      if (i % 10 == 0)
+      //if (docIdx % 10 == 0)
         evaluate(i)
     }
     model.writeTopics("results.txt")
