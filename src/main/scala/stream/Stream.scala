@@ -41,6 +41,63 @@ abstract class MappingStreamSampler[T] {
   def reset(newK: Int): Unit
 }
 
+class RecentUniformSampler[T: Manifest](tempK: Int) extends
+AssociativeStreamSampler[T] {
+  var k = tempK
+  var sample: List[T] = List.empty
+
+  def reset(newK: Int): Unit = {
+    sample = List.empty
+    k = newK
+  }
+
+  def add(item: T): RecentUniformSampler[T] = {
+    addItem(item)
+    this
+  }
+
+  /** Add item to reservoir and return triple containing index in
+    * reservoir (or `DidNotAddToSampler`), a boolean indicating whether
+    * an element was ejected from the reservoir, and the ejected
+    * element (or the item that was to be added)
+    */
+  def addItem(item: T): (Int,Boolean,T) =
+    if (sample.size == k) {
+      val ejectedElement = sample.last
+      sample = item +: sample.take(k-1)
+      (0, true, ejectedElement)
+    } else {
+      sample = item +: sample
+      (0, false, item)
+    }
+
+  def addAll(items: Array[T]): RecentUniformSampler[T] = {
+    items.foreach { item => add(item) }
+    this
+  }
+
+  def apply(i: Int): T = {
+    if (i >= sample.size)
+      throw new RuntimeException("sampler hasn't seen " + i +
+                                 " objects yet!")
+    else sample(i)
+  }
+
+  /** Output an array with all the elements in the sample; ie, if our sample
+   has < k elements in it, we only output the elements we have */
+  def getSampleSet: Array[T] =
+    sample.toArray
+
+  /** Capacity of sampler, ie, maximum number of slots available total */
+  def capacity = k
+
+  /** Number of elemtents in reservoir */
+  def occupied =
+    sample.size
+
+  override def toString: String = getSampleSet.deep.mkString(" ")
+}
+
 /** Simple implementation of reservoir sampling.
  *
  * The classical treatment is given by Vitter in Random Sampling With a
