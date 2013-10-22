@@ -70,7 +70,6 @@ object Evaluation {
     val nmis = nmi(model, labels, labelTypes)
     val writer = new PrintWriter(new File(filename))
 
-    println(nmis.deep)
     for (e <- nmis) {
       writer.write(e + "\n")
     }
