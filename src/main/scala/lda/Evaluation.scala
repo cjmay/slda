@@ -3,6 +3,7 @@
 
 package evaluation
 
+import java.io.{ PrintWriter, File }
 import scala.collection.mutable.{ ArrayBuffer => ArrayBuffer }
 import scala.math
 
@@ -11,7 +12,7 @@ import lda._
 
 object Evaluation {
   def mi (ourLabels: ArrayBuffer[Int], theirLabels: Array[String],
-          topics: Int, theirLabelTypes: Collection[String]):
+          topics: Int, theirLabelTypes: Iterable[String]):
   Double = {
     val n = ourLabels.length.toDouble
     var s = 0.0
@@ -33,7 +34,7 @@ object Evaluation {
   }
 
   def entropies (ourLabels: ArrayBuffer[Int], theirLabels: Array[String],
-                 topics: Int, theirLabelTypes: Collection[String]):
+                 topics: Int, theirLabelTypes: Iterable[String]):
   Double = {
     val n = ourLabels.length.toDouble
     var ent1 = 0.0
@@ -54,7 +55,7 @@ object Evaluation {
   }
 
   def nmi (model: PfLda, labels: Array[String],
-           labelTypes: Collection[String]): Array[Double] = {
+           labelTypes: Iterable[String]): Array[Double] = {
     val ntopics = model.T
     val ps = model.particles
     val ourLabels = ps.particles.map { p => p.docLabels }
@@ -62,5 +63,17 @@ object Evaluation {
       2* mi(docLabels, labels, ntopics, labelTypes) /
          entropies(docLabels, labels, ntopics, labelTypes) }
     mis
+  }
+
+  def writeOut (model: PfLda, labels: Array[String],
+                labelTypes: Iterable[String], filename: String): Unit = {
+    val nmis = nmi(model, labels, labelTypes)
+    val writer = new PrintWriter(new File(filename))
+
+    println(nmis.deep)
+    for (e <- nmis) {
+      writer.write(e + "\n")
+    }
+    writer.close()
   }
 }

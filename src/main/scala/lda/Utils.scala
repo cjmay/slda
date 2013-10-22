@@ -19,9 +19,9 @@ object Stats {
       case 0 => arr
       case 1 => { arr(0) = 1; arr }
       case _ => {
-	val sum = arr.reduceLeft(_+_)
-	(0 to arr.length-1).foreach { i => arr(i) = arr(i) / sum }
-	arr
+        val sum = arr.reduceLeft(_+_)
+        (0 to arr.length-1).foreach { i => arr(i) = arr(i) / sum }
+        arr
       }
     }
   }
@@ -33,24 +33,26 @@ object Stats {
     @tailrec
     def loop (i: Int, sum: Double, acc: Array[Double]): Array[Double] =
       if (i >= acc.length) {
-	acc(acc.length-1) = 1 // make sure last element is 1 and not eg 0.999
-	acc
-      }
-      else {
-	val curr = (acc(i) / sum) + acc(i-1)
-	acc(i) = curr
-	loop(i+1, sum, acc)
+        acc(acc.length-1) = 1 // make sure last element is 1 and not eg 0.999
+        acc
+      } else {
+        val curr = (acc(i) / sum) + acc(i-1)
+        acc(i) = curr
+        loop(i+1, sum, acc)
       }
     arr.length match {
       case 0 => arr
       case 1 => { arr(0) = 1; arr }
       case _ => {
-	val sum = arr.reduceLeft(_+_)
-	arr(0) = arr(0) / sum
-	loop(1, sum, arr)
+        val sum = arr.reduceLeft(_+_)
+        arr(0) = arr(0) / sum
+        loop(1, sum, arr)
       }
     }
   }
+
+  def sampleInt(bound: Int): Int =
+    sampler.nextInt(bound)
   
   /** Samples from simple categorical distribution; takes a normalized
    probability measure and returns a randomly-sampled index */

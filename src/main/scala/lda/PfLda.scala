@@ -1,7 +1,7 @@
 package lda
 
 import java.io.PrintWriter
-import scala.collection.mutable.{ HashMap => HashMap }
+import scala.collection.mutable.{ HashSet => HashSet }
 import scala.util.matching.Regex
 import scala.util.{ Random => Random }
 
@@ -14,109 +14,92 @@ import wrangle._
  * @param T Number of topics
  * @param alpha Symmetric Dirichlet prior
  * @param beta Symmetric Dirichlet prior
- * @param smplSize Number docs in reservoir sample
+ * @param reservoirSize Number tokens in reservoir
  * @param numParticles Number of particles to maintain
  * @param ess Controls threshold for rejuvenation. Higher = more often.
  * @param rejuvBatchSize number of words to rejuv per rejuvenation step
  * @param rejuvMcmcSteps number of steps to run rejuv MCMC before stopping
  */
-class PfLda (val T: Int, val alpha: Double, val beta: Double,
-             val smplSize: Int, val numParticles: Int, ess: Double,
-             val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
+class PfLda(val T: Int, val alpha: Double, val beta: Double,
+            val reservoirSize: Int, val numParticles: Int, ess: Double,
+            val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
   val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
-  var vocabToId = HashMap[String,Int]()
-  var rejuvSeq = new ReservoirSampler[Array[String]](smplSize)
-  var currVocabSize = 0
-  var currWordIdx = 0
+  var vocab: HashSet[String] = HashSet.empty
+  var currTokenNum = -1 // Just used for diagnostics
+  var particles: ParticleStore = null
+  var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
 
-  var particles = new ParticleStore(T, alpha, beta, numParticles, ess,
-                                    rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
-
-  private def simpleFilter (str: String): Boolean = {
+  private def simpleFilter(str: String): Boolean = {
     val patt = new Regex("\\W");
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
   }
 
-  /** Ingests set of documents, updating LDA run as we go */
-  def ingestDocs (docs: Array[String]): Unit =
+  /** Must be called before ingestDoc/ingestDocs */
+  def initialize(docs: Array[String], mcmcSteps: Int,
+      evaluate: (Int) => Unit): Unit = {
+    val docsTokens = docs.map(makeBOW(_)).toArray
+    vocab ++= docsTokens.flatten.toStream
+
+    val totalNumTokens = docsTokens.map(_.size).sum
+    currTokenNum += totalNumTokens
+    rejuvSeq = new ReservoirSampler(totalNumTokens)
+    particles = new ParticleStore(T, alpha, beta, numParticles, ess,
+                                  rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
+
+    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
+      evaluate)
+  }
+
+  def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
+
+  /** Ingest set of documents, updating LDA run as we go */
+  def ingestDocs(docs: Array[String]): Unit =
     docs.foreach{ doc => ingestDoc(doc) }
 
-  /** Ingest one document, update LDA as we go
-   *
-   * For each new word, we reweight the particles. Then we sample a topic
-   * assignment from the posterior. Then if the 2norm of the weight vector
-   * lies below a certain threshold, we resample the topics
-   */
-  def ingestDoc (doc: String): Int = {
-    val Words = Text.bow(doc, (str: String) => simpleFilter(str))
+  /** Ingest one document, update LDA as we go.
+    * For each new word, we reweight the particles. Then we sample a
+    * topic assignment from the posterior. Then if the 2norm of the
+    * weight vector lies below a certain threshold, we resample the
+    * topics
+    */
+  def ingestDoc(doc: String): Int = {
+    val words = makeBOW(doc)
 
-    val docIdx = newDocumentUpdate(Words) // happen before processing word!
+    val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
-    (0 to Words.length-1).foreach{ i => processWord(i, Words, docIdx) }
-    if (Words.length != 0)
-      print("\t\t\t" + ((System.currentTimeMillis - now)/Words.length))
-    println()
+    (0 to words.length-1).foreach{ i => processWord(i, words, docIdx) }
+    if (words.length != 0) {
+      println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
+      println("NUMWORDS " + words.length)
+    }
+    println
 
     docIdx
   }
 
   /** Process the ith entry in `words`; copied pretty much verbatim from
-   Algorithm 4 of Canini, et al "Online Inference of Topics..." */
-  private def processWord (i: Int, words: Array[String], docId: Int): Unit = {
-    val currword = words(i)
-    addWordIfNotSeen(currword) // side-effects; must be before particle updates!
-    currWordIdx += 1
+    * Algorithm 4 of Canini, et al "Online Inference of Topics..."
+    */
+  private def processWord(i: Int, words: Array[String], docIdx: Int): Unit = {
+    val word = words(i)
+    vocab += word
+    currTokenNum += 1
 
-    particles.unnormalizedReweightAll(currword, currVocabSize)
-    particles.transitionAll(i, words, currVocabSize, docId)
+    // TODO why reweight before transition?
+    particles.unnormalizedReweightAll(word, vocab.size)
+    particles.transitionAll(i, words(i), vocab.size, docIdx)
     particles.normalizeWeights()
 
-    if (particles.shouldRejuvenate())
-      particles.rejuvenate(allWordIds(docId, i+1), currVocabSize)
-  }
-
-  private def newDocumentUpdate (doc: Array[String]): Int = {
-    val index = rejuvSeq.addItem(doc)
-    particles.newDocumentUpdateAll(index, doc)
-    index
-  }
-
-  /** Array of wordIds; a word's id is a tuple (docId, wordIndex), where `docId`
-   tells us where in `rejuvSeq` our document is, and `wordIndex`, which tells us
-   where in that document our word is */
-  private def allWordIds (currDocIdx: Int, numWordsProcessed: Int): Array[(Int,Int)] = {
-    val sample = rejuvSeq.getSampleSet
-    val wordsInSample = sample.foldLeft(0){ (acc, doc) => acc + doc.length }
-    val numWordsUnprocessed =
-      if (currDocIdx == Constants.DidNotAddToSampler) 0
-      else sample(currDocIdx).length - numWordsProcessed
-    var wordIds = new Array[(Int,Int)](wordsInSample - numWordsUnprocessed)
-    var currIdx = 0
-    for (i <- 0 to sample.length-1) {
-      val lim = if (i == currDocIdx) numWordsProcessed else sample(i).length
-      for (j <- 0 to lim-1) {
-        wordIds(currIdx) = (i,j)
-        currIdx += 1
-      }
-    }
-    wordIds
-  }
-
-  /** Adds `word` to the current vocab map if not seen; uses current
-   currVocabSize as the id, i.e., if `word` is the nth seen so far, then n
-   happens to be == currVocabSize
-   */
-  private def addWordIfNotSeen (word: String): Unit = {
-    if (!(vocabToId contains word)) {
-      vocabToId(word) = currVocabSize
-      currVocabSize += 1
+    if (particles.shouldResample) {
+      println("REJUVENATE " + currTokenNum)
+      particles.resampleAndRejuvenate((0 to rejuvSeq.occupied-1).toArray,
+        vocab.size)
     }
   }
 
-  def writeTopics (filename: String): Unit = {
+  def writeTopics(filename: String): Unit = {
     Io.makeDirIfNE(DataConsts.RESULTS_DIR)
     println("WRITE TOPICS")
-    val wrdWIdx = vocabToId.toArray[(String,Int)]
     val particleObjs = particles.particles
     val pw = new PrintWriter(DataConsts.RESULTS_DIR + filename)
 
@@ -124,14 +107,12 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
       pw.write("PARTICLE " + p + "\n")
       val countVctr = particleObjs(p).globalVect
       for (t <- 0 to T-1) {
-        val percs = new Array[(Double,String)](wrdWIdx.size)
-        for (i <- 0 to wrdWIdx.size-1) {
+        val percs: Array[(Double,String)] = vocab.toArray.map({ w =>
           // grab each word, compute how much it comprises a given topic
-          val (w,id) = wrdWIdx(i)
           val prctg = countVctr.numTimesWordAssignedTopic(w, t).toDouble /
             countVctr.numTimesTopicAssignedTotal(t)
-          percs(i) = (prctg, w);
-        }
+          (prctg, w)
+        })
         pw.write("topic " + t + "\n")
         pw.write("\t" + percs.sorted.reverse.deep.mkString("\n\t") + "\n")
       }
@@ -140,24 +121,22 @@ class PfLda (val T: Int, val alpha: Double, val beta: Double,
     pw.close()
   }
 
-  // print total percentage a word as it occurs in each particular topic
-  def printTopics (): Unit = {
-    val wrdWIdx = vocabToId.toArray[(String,Int)]
+  /** print total percentage a word as it occurs in each particular
+    * topic
+    */
+  def printTopics: Unit = {
     val particleObjs = particles.particles
-
 
     for (p <- 0 to particleObjs.length-1) {
       println("PARTICLE " + p)
       val countVctr = particleObjs(p).globalVect
       for (t <- 0 to T-1) {
-        val percs = new Array[(Double,String)](wrdWIdx.size)
-        for (i <- 0 to wrdWIdx.size-1) {
+        val percs: Array[(Double,String)] = vocab.toArray.map({ w =>
           // grab each word, compute how much it comprises a given topic
-          val (w,id) = wrdWIdx(i)
           val prctg = countVctr.numTimesWordAssignedTopic(w, t).toDouble /
             countVctr.numTimesTopicAssignedTotal(t)
-          percs(i) = (prctg, w);
-        }
+          (prctg, w)
+        })
         println("topic " + t)
         println("\t" + percs.sorted.reverse.deep.mkString("\n\t"))
       }

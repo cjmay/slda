@@ -46,7 +46,7 @@ import wrangle._
  * @param beta Symmetric Dirichlet prior
  */
 abstract class Gibbs (val docs: Array[String], val T: Int,
-		      val alpha: Double, val beta: Double) {
+                      val alpha: Double, val beta: Double) {
   val D = docs.length
   val whitelist = Text.stopWords(DataConsts.TNG_WHITELIST)
   val (w, d) = Text.bow(docs, (str: String) => whitelist(str))
@@ -58,8 +58,8 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
     assignmentMatrices(w, d, z, wIdx)
 
   def this (docs: Array[String], T: Int, alpha: Double, beta: Double,
-	    allAssignedZ: Array[Int], wAssignedZ: Array[Array[Int]],
-	    allAssignedZInD: Array[Array[Int]]) = {
+            allAssignedZ: Array[Int], wAssignedZ: Array[Array[Int]],
+            allAssignedZInD: Array[Array[Int]]) = {
     this(docs, T, alpha, beta)
     this.allAssignedZ = GibbsUtil.copy1dArr(allAssignedZ)
     this.wAssignedZ = GibbsUtil.copy2dArr(wAssignedZ)
@@ -67,7 +67,7 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
   }
 
   def pointPosterior (currWord: Int, newTopic: Int, currTopic: Int,
-		      currDoc: Int): Double
+                      currDoc: Int): Double
   
   def resampleTopic(): Unit = resampleTopic(pointPosterior)
 
@@ -81,9 +81,9 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
     HashMap[String,Int] = {
       if (i >= w.length) accu
       else {
-	val currWord = w(i)
-	if (accu contains currWord) loop(i+1, currIdx, accu)
-	else loop(i+1, currIdx+1, accu += (currWord -> currIdx))
+        val currWord = w(i)
+        if (accu contains currWord) loop(i+1, currIdx, accu)
+        else loop(i+1, currIdx+1, accu += (currWord -> currIdx))
       }
     }
     loop(0, 0, new HashMap[String,Int])
@@ -105,22 +105,22 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
    * WARNING: MUTATES STATE
    */
   def assignmentMatrices (w: Array[String], d: Array[Int],
-				  z: Array[Int],
-				  wIdx: HashMap[String,Int]) = {
+                          z: Array[Int],
+                          wIdx: HashMap[String,Int]) = {
     @tailrec
     def loop (i: Int, allAssignedZ: Array[Int],
-	      wAssignedZ: Array[Array[Int]],
-	      allAssignedZInD: Array[Array[Int]]):
+              wAssignedZ: Array[Array[Int]],
+              allAssignedZInD: Array[Array[Int]]):
     (Array[Int], Array[Array[Int]], Array[Array[Int]]) = {
       if (i >= w.length) (allAssignedZ, wAssignedZ, allAssignedZInD)
       else {
-	val wordIdentifier = wIdx(w(i))
-	val topicIdentifier = z(i)
-	val docIdentifier = d(i)
-	allAssignedZ(topicIdentifier) += 1
-	wAssignedZ(topicIdentifier)(wordIdentifier) += 1
-	allAssignedZInD(topicIdentifier)(docIdentifier) += 1
-	loop(i+1, allAssignedZ, wAssignedZ, allAssignedZInD)
+        val wordIdentifier = wIdx(w(i))
+        val topicIdentifier = z(i)
+        val docIdentifier = d(i)
+        allAssignedZ(topicIdentifier) += 1
+        wAssignedZ(topicIdentifier)(wordIdentifier) += 1
+        allAssignedZInD(topicIdentifier)(docIdentifier) += 1
+        loop(i+1, allAssignedZ, wAssignedZ, allAssignedZInD)
       }
     }
     var allAssignedZ = Array.fill(T)(0)
@@ -132,8 +132,8 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
   /** Resamples the topic of the word that occurs at position `index` in
    * the corpus
    */
-  private def resampleTopic (index: Int, resampler: (Int, Int, Int, Int)
-			   => Double): Int = {
+  private def resampleTopic (index: Int,
+                             resampler: (Int, Int, Int, Int) => Double): Int = {
     val currWord = wIdx(w(index))
     val currTopic = z(index)
     val currDoc = d(index)
@@ -143,9 +143,9 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
     def loop (i: Int, limit: Int, accu: Array[Double]): Array[Double] = {
       if (i >= limit) accu
       else {
-	//accu(i) = pointPosterior(currWord, i, currTopic, currDoc)
-	accu(i) = resampler(currWord, i, currTopic, currDoc)
-	loop(i+1, limit, accu)
+        //accu(i) = pointPosterior(currWord, i, currTopic, currDoc)
+        accu(i) = resampler(currWord, i, currTopic, currDoc)
+        loop(i+1, limit, accu)
       }
     }
     
@@ -163,21 +163,21 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
     def loop (i: Int): Unit = {
       if (i >= w.length) return
       else {
-	val word = w(i)
-	val canonWordIdx = wIdx(word)
-	val doc = d(i)
-	val oldTopic = z(i)
-	val newTopic = resampleTopic(i, resampler)
-	
-	z(i) = newTopic
-	allAssignedZ(oldTopic) -= 1
-	allAssignedZ(newTopic) += 1
-	wAssignedZ(oldTopic)(canonWordIdx) -= 1
-	wAssignedZ(newTopic)(canonWordIdx) += 1
-	allAssignedZInD(oldTopic)(doc) -= 1
-	allAssignedZInD(newTopic)(doc) += 1
-	
-	loop(i+1)
+        val word = w(i)
+        val canonWordIdx = wIdx(word)
+        val doc = d(i)
+        val oldTopic = z(i)
+        val newTopic = resampleTopic(i, resampler)
+        
+        z(i) = newTopic
+        allAssignedZ(oldTopic) -= 1
+        allAssignedZ(newTopic) += 1
+        wAssignedZ(oldTopic)(canonWordIdx) -= 1
+        wAssignedZ(newTopic)(canonWordIdx) += 1
+        allAssignedZInD(oldTopic)(doc) -= 1
+        allAssignedZInD(newTopic)(doc) += 1
+        
+        loop(i+1)
       }
     }
     loop(0)
@@ -187,10 +187,8 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
 /** A collapsed batch Gibbs sampler for performing LDA
  */
 class CollapsedGibbs (docs: Array[String], T: Int, alpha: Double,
-		      beta: Double, k: Int)
+                      beta: Double, k: Int)
 extends Gibbs(docs, T, alpha, beta) {
-  var sampler = new ReservoirSampler[Array[String]](k)
-  
   /** Computes the update step for 1 choice of topic
    *
    * In "Online Inference of Topics with LDA" (Canini et al), equation (1)
@@ -217,7 +215,7 @@ extends Gibbs(docs, T, alpha, beta) {
    *                `currWord`
    */
   def pointPosterior (currWord: Int, newTopic: Int, currTopic: Int,
-			      currDoc: Int): Double = {
+                      currDoc: Int): Double = {
     if (currTopic == newTopic) {
       // Pr[currWord | topic]
       val frst = (wAssignedZ(newTopic)(currWord) - 1 + beta) /
@@ -248,18 +246,18 @@ extends Gibbs(docs, T, alpha, beta) {
     var (evAllAssignedZ, evWAssignedZ, evAllAssignedZInD) =
       assignmentMatrices(w, d, z, wIdx)
     new Evaluator(docs, T, alpha, beta, evAllAssignedZ, evWAssignedZ,
-		  evAllAssignedZInD)
+                  evAllAssignedZInD)
   }
 }
 
 class Evaluator (docs: Array[String], T: Int,
-		 alpha: Double, beta: Double, allAssignedZ: Array[Int],
-		 wAssignedZ: Array[Array[Int]],
-		 allAssignedZInD: Array[Array[Int]])
+                 alpha: Double, beta: Double, allAssignedZ: Array[Int],
+                 wAssignedZ: Array[Array[Int]],
+                 allAssignedZInD: Array[Array[Int]])
 extends Gibbs(docs, T, alpha, beta, allAssignedZ, wAssignedZ,
-	      allAssignedZInD) {
+              allAssignedZInD) {
   def pointPosterior (currWord: Int, newTopic: Int, currTopic: Int,
-		      currDoc: Int): Double = {
+                      currDoc: Int): Double = {
     if (currTopic == newTopic) {
       // Pr[currWord | topic]
       val frst = (wAssignedZ(newTopic)(currWord) - 1 + beta) /
