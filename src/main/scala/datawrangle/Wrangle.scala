@@ -129,21 +129,26 @@ object TNG {
     val documents = Array.fill(numDocuments)("")
     val documentLabels = Array.fill(numDocuments)("")
     val categoryIndices = Array.fill(categoriesArray.length)(0)
-    var pdf = numDocumentsPerCategory.map(_.toDouble)
-    var cdf = Stats.normalizeAndMakeCdf(pdf)
+
+    var cdf = Stats.normalizeAndMakeCdf(
+      numDocumentsPerCategory.map(_.toDouble))
+
+    @tailrec
+    def sampleCategory(): Int = {
+      val catIdx = Stats.sampleCategorical(cdf)
+      if (categoryIndices(catIdx) == numDocumentsPerCategory(catIdx))
+        sampleCategory()
+      else
+        catIdx
+    }
 
     for (docIdx <- 0 until numDocuments) {
-      val catIdx = Stats.sampleCategorical(cdf)
+      val catIdx = sampleCategory()
 
       documents(docIdx) = documentsByCategory(catIdx)(categoryIndices(catIdx))
       documentLabels(docIdx) = categoriesArray(catIdx)
 
       categoryIndices(catIdx) += 1
-
-      if (categoryIndices(catIdx) == numDocumentsPerCategory(catIdx)) {
-        pdf(catIdx) = 0
-        cdf = Stats.normalizeAndMakeCdf(pdf)
-      }
     }
 
     (documents, documentLabels, categories)
