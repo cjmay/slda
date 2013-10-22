@@ -15,10 +15,9 @@ trait RunLdaParams {
   val rejuvMcmcSteps: Int
   val initialBatchSize: Int
   val initialBatchMcmcSteps: Int
-  val labelTypes: List[String]
   val corpus: Array[String]
   val labels: Array[String]
-  val cats: Int
+  val cats: List[String]
 }
 
 object Sim3PfParams extends RunLdaParams {
@@ -31,7 +30,6 @@ object Sim3PfParams extends RunLdaParams {
   val rejuvMcmcSteps = 20
   val initialBatchSize = 177 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 200
-  val labelTypes = wrangle.DataConsts.SIM_3_LABELS
   val (corpus, labels, cats) = wrangle.TNG.sim3
 }
 
@@ -45,7 +43,6 @@ object Rel3PfParams extends RunLdaParams {
   val rejuvMcmcSteps = 20
   val initialBatchSize = 158 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 200
-  val labelTypes = wrangle.DataConsts.REL_3_LABELS
   val (corpus, labels, cats) = wrangle.TNG.rel3
 }
 
@@ -59,13 +56,12 @@ object Diff3PfParams extends RunLdaParams {
   val rejuvMcmcSteps = 20
   val initialBatchSize = 167 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 200
-  val labelTypes = wrangle.DataConsts.DIFF_3_LABELS
   val (corpus, labels, cats) = wrangle.TNG.diff3
 }
 
 object RunLda {
   def main (args: Array[String]) {
-    val params = Diff3PfParams
+    val params: RunLdaParams = Diff3PfParams
 
     println("loading corpus...")
     // if we don't shuffle them, and if we don't shuffle them with the
@@ -74,14 +70,14 @@ object RunLda {
     val labels = (new Random(10)).shuffle(params.labels.toSeq).toArray
 
     println("initializing model...")
-    val model = new PfLda(params.cats, params.alpha, params.beta,
+    val model = new PfLda(params.cats.size, params.alpha, params.beta,
                           params.reservoirSize, params.numParticles,
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
 
     val evaluate = (docIdx: Int) =>
       Evaluation.writeOut(model, labels.slice(0, docIdx+1),
-                          params.labelTypes,
+                          params.cats,
                           DataConsts.RESULTS_DIR +  docIdx.toString() + ".txt")
 
     // TODO: batch size: documents...? not tokens?
@@ -103,7 +99,7 @@ object RunLda {
     }
     model.writeTopics("results.txt")
 
-    val mis = Evaluation.nmi(model, labels, params.labelTypes)
+    val mis = Evaluation.nmi(model, labels, params.cats)
     println(mis.deep)
   }
 }
