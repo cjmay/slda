@@ -52,7 +52,7 @@ object Diff3PfParams extends RunLdaParams {
   val reservoirSize = 1670 // reservoir size in tokens
   val numParticles = 100
   val ess = 20.0 // effective sample size threshold
-  val rejuvBatchSize = 10 // |R(i)|
+  val rejuvBatchSize = 30 // |R(i)|
   val rejuvMcmcSteps = 20
   val initialBatchSize = 167 // number of docs for batch MCMC init
   val initialBatchMcmcSteps = 200
