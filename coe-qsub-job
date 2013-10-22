@@ -2,7 +2,7 @@
 #$ -cwd
 #$ -j y
 #$ -V
-#$ -l num_proc=1,mem_free=6G,h_vmem=6G,h_rt=4:00:00
+#$ -l num_proc=2,mem_free=6G,h_rt=4:00:00
 #$ -N "slda"
-#cd $BUILD && src/build.sh log-linear ~aclemmer/Jerboa /home/hltcoe/aclemmer/Jerboa/analytic/english-gender/build/twitterMITRE prob
-/export/apps/sbt-0.12.1/bin/sbt -J-Xmx4G -J-XX:+UseSerialGC run
+export JAVA_HOME=/export/apps/java/bin/java
+/export/apps/sbt-0.12.1/bin/sbt -J-Xmx3G -J-Xms3G -J-XX:ParallelGCThreads=1 run
