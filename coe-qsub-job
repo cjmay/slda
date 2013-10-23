@@ -6,3 +6,4 @@
 #$ -N "slda"
 export JAVA_HOME=/export/apps/java/bin/java
 /export/apps/sbt-0.12.1/bin/sbt -J-Xmx3G -J-Xms3G -J-XX:ParallelGCThreads=1 run
+gzip results/results.txt
