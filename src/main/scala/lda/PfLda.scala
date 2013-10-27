@@ -3,7 +3,6 @@ package lda
 import java.io.PrintWriter
 import scala.collection.mutable.{ HashSet => HashSet }
 import scala.util.matching.Regex
-import scala.util.{ Random => Random }
 
 import globals.Constants
 import stream._

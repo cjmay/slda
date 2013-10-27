@@ -10,6 +10,7 @@ import scala.collection.mutable.Map
 import scala.util.{ Random => Random }
 
 import globals.Constants
+import lda.Stats
 
 /** Associative stream samplers are backed by a regular associative array,
  * meaning their elements are not key-addressable. Reservoir sampling, for
@@ -53,7 +54,6 @@ AssociativeStreamSampler[T] {
   var k = tempK
   var sample = new Array[T](k)
   var currIdx = 0
-  var randombits = new Random()
 
   def reset(newK: Int): Unit = {
     sample = new Array[T](newK)
@@ -75,7 +75,7 @@ AssociativeStreamSampler[T] {
   def addItem(item: T): (Int,Boolean,T) = {
     val triple = if (currIdx >= k) {
       // IMPORTANT: `nextInt()` not inclusive, so the `+1` is required
-      val slotToReplace = randombits.nextInt(currIdx+1)
+      val slotToReplace = Stats.sampleInt(currIdx+1)
       if (slotToReplace < k) {
         val ejectedElement = sample(slotToReplace)
         sample(slotToReplace) = item

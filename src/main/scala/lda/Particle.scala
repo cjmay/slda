@@ -3,7 +3,6 @@ package lda
 import scala.annotation.tailrec
 import scala.collection.mutable.{ ArrayBuffer => ArrayBuffer }
 import scala.collection.mutable.{ HashMap => HashMap }
-import scala.util.{ Random => Random }
 
 import globals.Constants
 import stream._

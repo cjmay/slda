@@ -1,7 +1,5 @@
 package lda
 
-import scala.util.Random
-
 import evaluation._
 import wrangle._
 
@@ -61,13 +59,33 @@ object Diff3PfParams extends RunLdaParams {
 
 object RunLda {
   def main (args: Array[String]) {
+    if (args.size > 0 && args(0) == "-s")
+      Stats.setSeed(args(1).toLong)
+    else
+      Stats.setDefaultSeed()
+
     val params: RunLdaParams = Diff3PfParams
 
     println("loading corpus...")
     // if we don't shuffle them, and if we don't shuffle them with the
     // same seed, our NMI suffers greatly
-    val corpus = (new Random(10)).shuffle(params.corpus.toSeq).toArray
-    val labels = (new Random(10)).shuffle(params.labels.toSeq).toArray
+    val (corpus, labels) = if (true) {
+      val docLabelPairs = params.corpus.zip(params.labels)
+      val initDocLabelPairs =
+        docLabelPairs.slice(0, params.initialBatchSize)
+      val shuffledInitDocLabelPairs =
+        Stats.shuffle(initDocLabelPairs.toSeq).toArray
+      val restDocLabelPairs =
+        docLabelPairs.slice(params.initialBatchSize, docLabelPairs.size)
+      val partShuffledDocLabelPairs =
+        shuffledInitDocLabelPairs ++ restDocLabelPairs
+      (partShuffledDocLabelPairs.map(p => p._1),
+        partShuffledDocLabelPairs.map(p => p._2))
+    } else {
+      val docLabelPairs = Stats.shuffle(params.corpus.zip(params.labels).toSeq)
+      (docLabelPairs.map(p => p._1).toArray,
+        docLabelPairs.map(p => p._2).toArray)
+    }
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
@@ -86,6 +104,8 @@ object RunLda {
       (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
       evaluate)
+
+    Stats.setDefaultSeed()
 
     println("running particle filter...")
     for (i <- params.initialBatchSize to corpus.length-1) {
