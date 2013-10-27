@@ -67,25 +67,8 @@ object RunLda {
     val params: RunLdaParams = Diff3PfParams
 
     println("loading corpus...")
-    // if we don't shuffle them, and if we don't shuffle them with the
-    // same seed, our NMI suffers greatly
-    val (corpus, labels) = if (true) {
-      val docLabelPairs = params.corpus.zip(params.labels)
-      val initDocLabelPairs =
-        docLabelPairs.slice(0, params.initialBatchSize)
-      val shuffledInitDocLabelPairs =
-        Stats.shuffle(initDocLabelPairs.toSeq).toArray
-      val restDocLabelPairs =
-        docLabelPairs.slice(params.initialBatchSize, docLabelPairs.size)
-      val partShuffledDocLabelPairs =
-        shuffledInitDocLabelPairs ++ restDocLabelPairs
-      (partShuffledDocLabelPairs.map(p => p._1),
-        partShuffledDocLabelPairs.map(p => p._2))
-    } else {
-      val docLabelPairs = Stats.shuffle(params.corpus.zip(params.labels).toSeq)
-      (docLabelPairs.map(p => p._1).toArray,
-        docLabelPairs.map(p => p._2).toArray)
-    }
+    val (corpus, labels) = shuffleInit(params.corpus, params.labels,
+      params.initialBatchSize)
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
@@ -121,5 +104,20 @@ object RunLda {
 
     val mis = Evaluation.nmi(model, labels, params.cats)
     println(mis.deep)
+  }
+
+  private def shuffleInit(corpus: Array[String], labels: Array[String],
+      initialBatchSize: Int): (Array[String], Array[String]) = {
+    val docLabelPairs = corpus.zip(labels)
+    val initDocLabelPairs =
+      docLabelPairs.slice(0, initialBatchSize)
+    val shuffledInitDocLabelPairs =
+      Stats.shuffle(initDocLabelPairs.toSeq).toArray
+    val restDocLabelPairs =
+      docLabelPairs.slice(initialBatchSize, docLabelPairs.size)
+    val partShuffledDocLabelPairs =
+      shuffledInitDocLabelPairs ++ restDocLabelPairs
+    (partShuffledDocLabelPairs.map(p => p._1),
+      partShuffledDocLabelPairs.map(p => p._2))
   }
 }
