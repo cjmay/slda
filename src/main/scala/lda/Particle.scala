@@ -110,11 +110,12 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
 
   /** Perform rejuvenation MCMC for every particle */
   def rejuvenateAll(tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int,
-                    currVocabSize: Int): Unit =
+                    currVocabSize: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
       p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {})
     }
+  }
 
   /** Run batch MCMC on specified docs to initialize model parameters.
     * Computation will be performed in particle zero; at the end,
