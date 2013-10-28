@@ -108,14 +108,11 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     uniformReweightAll()
   }
 
-  /** Perform rejuvenation MCMC for every particle, taking a different
-    * sample from the specified tokens for the rejuvenation sequence
-    * for each particle
-    */
+  /** Perform rejuvenation MCMC for every particle */
   def rejuvenateAll(tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int,
                     currVocabSize: Int): Unit =
+    val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
-      val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
       p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {})
     }
 
