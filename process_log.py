@@ -2,6 +2,7 @@
 
 
 import os.path
+import sys
 
 
 def mean(x):
@@ -25,8 +26,11 @@ class AggLogData(object):
 
     def add(self, log_data):
         if self.mean_nmi:
-            for i in range(len(log_data.nmi)):
-                self.mean_nmi[i].append(mean(log_data.nmi[i]))
+            if len(log_data.nmi) == len(self.mean_nmi):
+                for i in range(len(log_data.nmi)):
+                    self.mean_nmi[i].append(mean(log_data.nmi[i]))
+            else:
+                sys.stderr.write('Wrong number of documents: %d != %d\n' % (len(log_data.nmi), len(self.mean_nmi)))
         else:
             self.mean_nmi = [[mean(p)] for p in log_data.nmi]
 
@@ -92,5 +96,4 @@ def parse_log(log_filename):
 
 
 if __name__ == '__main__':
-    import sys
     process_logs(*sys.argv[1:])
