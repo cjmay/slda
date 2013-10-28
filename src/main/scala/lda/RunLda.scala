@@ -21,7 +21,7 @@ trait RunLdaParams {
 object Sim3PfParams extends RunLdaParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
+  val reservoirSize = 1000 // reservoir size in tokens
   val numParticles = 100
   val ess = 20.0 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
@@ -34,7 +34,7 @@ object Sim3PfParams extends RunLdaParams {
 object Rel3PfParams extends RunLdaParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
+  val reservoirSize = 1000 // reservoir size in tokens
   val numParticles = 100
   val ess = 20.0 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
@@ -47,7 +47,7 @@ object Rel3PfParams extends RunLdaParams {
 object Diff3PfParams extends RunLdaParams {
   val alpha = 0.1 // topic distribution prior
   val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
+  val reservoirSize = 1000 // reservoir size in tokens
   val numParticles = 100
   val ess = 20.0 // effective sample size threshold
   val rejuvBatchSize = 30 // |R(i)|
