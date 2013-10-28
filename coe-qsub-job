@@ -5,5 +5,5 @@
 #$ -l num_proc=2,mem_free=8G,h_rt=24:00:00
 #$ -N "slda"
 export JAVA_HOME=/export/apps/java/bin/java
-/export/apps/sbt-0.12.1/bin/sbt -J-Xmx4G -J-Xms4G -J-XX:ParallelGCThreads=1 'run -s 18'
+/export/apps/sbt-0.12.1/bin/sbt -J-Xmx4G -J-Xms4G -J-XX:ParallelGCThreads=1 run
 gzip results/results.txt
