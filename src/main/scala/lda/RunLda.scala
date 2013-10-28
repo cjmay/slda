@@ -3,57 +3,33 @@ package lda
 import evaluation._
 import wrangle._
 
-trait RunLdaParams {
-  val alpha: Double
-  val beta: Double
-  val reservoirSize: Int
-  val numParticles: Int
-  val ess: Double
-  val rejuvBatchSize: Int
-  val rejuvMcmcSteps: Int
+abstract class RunLdaParams {
+  val alpha: Double = 0.1
+  val beta: Double = 0.1
+  val reservoirSize: Int = 1000
+  val numParticles: Int = 100
+  val ess: Double = 20.0
+  val rejuvBatchSize: Int = 30
+  val rejuvMcmcSteps: Int = 20
   val initialBatchSize: Int
-  val initialBatchMcmcSteps: Int
+  val initialBatchMcmcSteps: Int = 150
   val corpus: Array[String]
   val labels: Array[String]
   val cats: List[String]
 }
 
 object Sim3PfParams extends RunLdaParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
-  val numParticles = 100
-  val ess = 20.0 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
   val initialBatchSize = 177 // number of docs for batch MCMC init
-  val initialBatchMcmcSteps = 200
   val (corpus, labels, cats) = wrangle.TNG.sim3
 }
 
 object Rel3PfParams extends RunLdaParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
-  val numParticles = 100
-  val ess = 20.0 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
   val initialBatchSize = 158 // number of docs for batch MCMC init
-  val initialBatchMcmcSteps = 200
   val (corpus, labels, cats) = wrangle.TNG.rel3
 }
 
 object Diff3PfParams extends RunLdaParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val reservoirSize = 10000 // reservoir size in tokens
-  val numParticles = 100
-  val ess = 20.0 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
   val initialBatchSize = 167 // number of docs for batch MCMC init
-  val initialBatchMcmcSteps = 200
   val (corpus, labels, cats) = wrangle.TNG.diff3
 }
 
