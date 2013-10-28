@@ -17,7 +17,7 @@ abstract class RunLdaParams {
   val labels: Array[String]
   val cats: List[String]
   val useDefaultSeed: Boolean = false
-  val seed: Long = 18
+  val seed: Long = 21
 }
 
 object Sim3PfParams extends RunLdaParams {
