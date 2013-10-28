@@ -16,7 +16,6 @@ abstract class RunLdaParams {
   val corpus: Array[String]
   val labels: Array[String]
   val cats: List[String]
-  val orderPfData: Boolean = true
   val useDefaultSeed: Boolean = false
   val seed: Long = 18
 }
@@ -46,8 +45,10 @@ object RunLda {
       Stats.setSeed(params.seed)
 
     println("loading corpus...")
-    val (corpus, labels) = shuffleInit(params.corpus, params.labels,
-      if (params.orderPfData) params.initialBatchSize else params.corpus.size)
+    val docLabelPairs = Stats.shuffle(params.corpus.zip(params.labels).toSeq)
+    val (corpus, labels) =
+      (docLabelPairs.map(p => p._1).toArray,
+       docLabelPairs.map(p => p._2).toArray)
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
@@ -83,20 +84,5 @@ object RunLda {
 
     val mis = Evaluation.nmi(model, labels, params.cats)
     println(mis.deep)
-  }
-
-  private def shuffleInit(corpus: Array[String], labels: Array[String],
-      initialBatchSize: Int): (Array[String], Array[String]) = {
-    val docLabelPairs = corpus.zip(labels)
-    val initDocLabelPairs =
-      docLabelPairs.slice(0, initialBatchSize)
-    val shuffledInitDocLabelPairs =
-      Stats.shuffle(initDocLabelPairs.toSeq).toArray
-    val restDocLabelPairs =
-      docLabelPairs.slice(initialBatchSize, docLabelPairs.size)
-    val partShuffledDocLabelPairs =
-      shuffledInitDocLabelPairs ++ restDocLabelPairs
-    (partShuffledDocLabelPairs.map(p => p._1),
-      partShuffledDocLabelPairs.map(p => p._2))
   }
 }
