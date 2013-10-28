@@ -59,16 +59,29 @@ object Diff3PfParams extends RunLdaParams {
 
 object RunLda {
   def main (args: Array[String]) {
-    if (args.size > 0 && args(0) == "-s")
-      Stats.setSeed(args(1).toLong)
-    else
-      Stats.setDefaultSeed()
+    var argsOffset = 0
+    var orderedPfData = true
+
+    Stats.setDefaultSeed()
+
+    while (argsOffset < args.size) {
+      if (args(argsOffset) == "-s") {
+        Stats.setSeed(args(argsOffset+1).toLong)
+        argsOffset += 2
+      } else if (args(argsOffset) == "-r") {
+        orderedPfData = false
+        argsOffset += 1
+      } else {
+        System.err.println("Unknown argument: " + args(argsOffset))
+        argsOffset += 1
+      }
+    }
 
     val params: RunLdaParams = Diff3PfParams
 
     println("loading corpus...")
     val (corpus, labels) = shuffleInit(params.corpus, params.labels,
-      params.initialBatchSize)
+      if (orderedPfData) params.initialBatchSize else params.corpus.size)
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
