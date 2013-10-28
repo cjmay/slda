@@ -16,8 +16,9 @@ abstract class RunLdaParams {
   val corpus: Array[String]
   val labels: Array[String]
   val cats: List[String]
-  val useDefaultSeed: Boolean = false
   val seed: Long
+  val fixInitialSample: Boolean = true
+  val fixInitialModel: Boolean = true
 }
 
 object Sim3PfParams extends RunLdaParams {
@@ -42,9 +43,13 @@ object RunLda {
   def main (args: Array[String]) {
     val params: RunLdaParams = Diff3PfParams
 
-    if (params.useDefaultSeed)
-      Stats.setDefaultSeed()
-    else
+    if (params.fixInitialModel && ! params.fixInitialSample)
+      println("warning: fixInitialModel implies fixInitialSample")
+
+    // If we want to fix the random seed for the data shuffle or
+    // fix the seed for the Gibbs initialization---which implies
+    // a fixed seed for the data shuffle---we do so here
+    if (params.fixInitialSample || params.fixInitialModel)
       Stats.setSeed(params.seed)
 
     println("loading corpus...")
@@ -52,6 +57,11 @@ object RunLda {
     val (corpus, labels) =
       (docLabelPairs.map(p => p._1).toArray,
        docLabelPairs.map(p => p._2).toArray)
+
+    // If we fixed a random seed for the data shuffle but want a random
+    // Gibbs initialization, reinitialize seed randomly
+    if (params.fixInitialSample && ! params.fixInitialModel)
+      Stats.setDefaultSeed()
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
@@ -64,14 +74,16 @@ object RunLda {
                           params.cats,
                           DataConsts.RESULTS_DIR + docIdx.toString() + ".txt")
 
-    // TODO: batch size: documents...? not tokens?
     // TODO: what if batch size is bigger than corpus?
     model.initialize(
       (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
       evaluate)
 
-    Stats.setDefaultSeed()
+    // If we fixed a random seed earlier and haven't reinitialized it
+    // yet, reinitialize it randomly now
+    if (params.fixInitialModel)
+      Stats.setDefaultSeed()
 
     println("running particle filter...")
     for (i <- params.initialBatchSize to corpus.length-1) {
