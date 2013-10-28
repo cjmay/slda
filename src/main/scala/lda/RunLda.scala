@@ -17,21 +17,24 @@ abstract class RunLdaParams {
   val labels: Array[String]
   val cats: List[String]
   val useDefaultSeed: Boolean = false
-  val seed: Long = 21
+  val seed: Long
 }
 
 object Sim3PfParams extends RunLdaParams {
   val initialBatchSize = 177 // number of docs for batch MCMC init
+  val seed = 43L
   val (corpus, labels, cats) = wrangle.TNG.sim3
 }
 
 object Rel3PfParams extends RunLdaParams {
   val initialBatchSize = 158 // number of docs for batch MCMC init
+  val seed = 23L
   val (corpus, labels, cats) = wrangle.TNG.rel3
 }
 
 object Diff3PfParams extends RunLdaParams {
   val initialBatchSize = 167 // number of docs for batch MCMC init
+  val seed = 21L
   val (corpus, labels, cats) = wrangle.TNG.diff3
 }
 
