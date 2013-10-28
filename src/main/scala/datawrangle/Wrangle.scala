@@ -117,25 +117,52 @@ object DataConsts {
 /** Wrangles the 20 Newsgroups dataset
  */
 object TNG {
-  private def loadCategories(categories: List[String]):
+  def orderedMixture(categories: List[String]):
   (Array[String], Array[String], List[String]) = {
-    val docCatPairs = categories.map({category =>
-      Io.rawCorpus(wrangle.DataConsts.TNG_TRAIN_DIR + category).map({doc =>
-        (doc, category)
-      })
-    }).toArray.flatten
-    (docCatPairs.map(p => p._1), docCatPairs.map(p => p._2), categories)
+    val categoriesArray = categories.toArray
+    val documentsByCategory = categoriesArray.map({category =>
+      Io.rawCorpus(wrangle.DataConsts.TNG_TRAIN_DIR + category)
+    })
+    val numDocumentsPerCategory = documentsByCategory.map(_.length)
+    val numDocuments = numDocumentsPerCategory.sum
+
+    val documents = Array.fill(numDocuments)("")
+    val documentLabels = Array.fill(numDocuments)("")
+    val categoryIndices = Array.fill(categoriesArray.length)(0)
+
+    var cdf = Stats.normalizeAndMakeCdf(
+      numDocumentsPerCategory.map(_.toDouble))
+
+    @tailrec
+    def sampleCategory(): Int = {
+      val catIdx = Stats.sampleCategorical(cdf)
+      if (categoryIndices(catIdx) == numDocumentsPerCategory(catIdx))
+        sampleCategory()
+      else
+        catIdx
+    }
+
+    for (docIdx <- 0 until numDocuments) {
+      val catIdx = sampleCategory()
+
+      documents(docIdx) = documentsByCategory(catIdx)(categoryIndices(catIdx))
+      documentLabels(docIdx) = categoriesArray(catIdx)
+
+      categoryIndices(catIdx) += 1
+    }
+
+    (documents, documentLabels, categories)
   }
 
   def sim3 =
-    loadCategories(
+    orderedMixture(
       List("comp.graphics", "comp.os.ms-windows.misc", "comp.windows.x"))
 
   def rel3 =
-    loadCategories(
+    orderedMixture(
       List("talk.politics.misc", "talk.politics.guns", "talk.politics.mideast"))
 
   def diff3 =
-    loadCategories(
+    orderedMixture(
       List("alt.atheism", "rec.sport.baseball", "sci.space"))
 }
