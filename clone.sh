@@ -4,7 +4,14 @@ set -e
 
 ROOT_REPO_PATH="$PWD"
 
-NEW_REPO_PATH_STEM="$HOME/slda-run"
+if [ $# -eq 1 ]
+then
+    mkdir -p "$1"
+    NEW_REPO_PATH_STEM="$1/slda-run"
+else
+    NEW_REPO_PATH_STEM="$HOME/slda-run"
+fi
+
 i=0
 new_repo_path="$NEW_REPO_PATH_STEM-$i"
 while [ -d "$new_repo_path" ]
