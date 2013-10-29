@@ -2,8 +2,8 @@
 #$ -cwd
 #$ -j y
 #$ -V
-#$ -l num_proc=1,mem_free=8G,h_rt=24:00:00
+#$ -l num_proc=1,mem_free=12G,h_rt=24:00:00
 #$ -N "slda"
 export JAVA_HOME=/export/apps/java/bin/java
-/export/apps/sbt-0.12.1/bin/sbt -J-Xmx4G -J-Xms4G -J-XX:+UseSerialGC run
+/export/apps/sbt-0.12.1/bin/sbt -J-Xmx6G -J-Xms6G -J-XX:+UseSerialGC run
 gzip results/results.txt
