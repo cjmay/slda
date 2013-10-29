@@ -6,7 +6,7 @@ import wrangle._
 abstract class RunLdaParams {
   val alpha: Double = 0.1
   val beta: Double = 0.1
-  val reservoirSize: Int = 100
+  val reservoirSize: Int = 1000
   val numParticles: Int = 100
   val ess: Double = 20.0
   val rejuvBatchSize: Int = 30
