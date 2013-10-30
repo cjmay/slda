@@ -3,6 +3,9 @@
   - as an approximation, just take max-weight particle
   - plan:
     + first try gibbs2.S?  basically modify (or abstract) initialization so we can run it on a test set in a new particle and then throw away that particle.
+      . vocab
+      . new particle
+      . temp new reservoir
     + adhere to Canini et al.: add rejuvSeq.copy, add assgStore.copy, copy entire ParticleStore and infer over test set on that... yuck!!
 * re-run experiments with shared sample in rejuvenation, compare
 * find decent seeds for rel-3, sim-3, find a way to set in clone
