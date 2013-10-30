@@ -1,3 +1,9 @@
-- re-run experiments with shared sample in rejuvenation, compare
-- find decent seeds for rel-3, sim-3, find a way to set in clone
-- start main experiments
+* eval: use "sample" (particle) with max posterior probability---max weight particle?; compute topic for doc as most frequent topic; on test, run alg on test data as if it was next docs
+  - note: posterior prob of a set of topic assignments z is sum of particle weights over particles whose topic assignments are equal to z.  if two particles have same topic assignments z, their sufficient statistics(?) will be identical.  thus to get map sample, find topic assignments for which sum of particle weights over the particles with that set of topic assignments is maximized.
+  - as an approximation, just take max-weight particle
+  - plan:
+    + first try gibbs2.S?  basically modify (or abstract) initialization so we can run it on a test set in a new particle and then throw away that particle.
+    + adhere to Canini et al.: add rejuvSeq.copy, add assgStore.copy, copy entire ParticleStore and infer over test set on that... yuck!!
+* re-run experiments with shared sample in rejuvenation, compare
+* find decent seeds for rel-3, sim-3, find a way to set in clone
+* start main experiments
