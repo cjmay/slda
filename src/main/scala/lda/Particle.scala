@@ -108,12 +108,15 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     uniformReweightAll()
   }
 
-  /** Perform rejuvenation MCMC for every particle */
+  /** Perform rejuvenation MCMC for every particle using a sample from
+    * the provided token ids
+    */
   def rejuvenateAll(tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int,
                     currVocabSize: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
-      p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {})
+      p.rejuvenate(p.tokenIdsToRejuvStats(sample), mcmcSteps, currVocabSize,
+        (docIdx: Int) => {})
     }
   }
 
@@ -141,7 +144,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize, evaluate)
+    p.rejuvenate(p.tokenIdsToRejuvStats(allTokenIds.flatten), mcmcSteps,
+      currVocabSize, evaluate)
 
     println("* transitioning to particle filter")
 
@@ -527,15 +531,9 @@ class Particle(val topics: Int, val initialWeight: Double,
     if (tokenIdx != Constants.DidNotAddToSampler)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
 
-    docLabels(docIdx) = docLabel(currDocVect)
+    new RejuvenationStatsSetter(assgStore, globalVect, currDocVect, topics,
+      docLabels, particleId, docIdx, wordIdx, word).recomputeDocLabel
     sampledTopic
-  }
-
-  def docLabel(docVect: DocumentUpdateVector): Int = {
-    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
-    (0 until topics).reduce({(t1, t2) =>
-      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
-    })
   }
 
   /** Create pointers and data structures for new document */
@@ -547,29 +545,30 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Rejuvenate particle by MCMC, using specified tokens as
     * rejuvenation sequence and iterating for mcmcSteps.
     */
-  def rejuvenate(tokenIds: Array[Int], mcmcSteps: Int,
-                 currVocabSize: Int, evaluate: (Int) => Unit): Unit = {
+  def rejuvenate(statsGetterSetterPairs: Array[(IncrementalStats,CGStatsSetter)],
+                 mcmcSteps: Int, currVocabSize: Int, evaluate: (Int) => Unit):
+  Unit = {
     for (i <- 1 to mcmcSteps) {
-      tokenIds.foreach{ tokenIdx =>
-        resampleRejuvSeqWord(tokenIdx, currVocabSize)
+      statsGetterSetterPairs.foreach{ statsGetterSetterPair =>
+        val cdf = posterior(statsGetterSetterPair._1, currVocabSize)
+        val sampledTopic = Stats.sampleCategorical(cdf)
+        statsGetterSetterPair._2.assignNewTopic(sampledTopic)
+        // TODO something is broken
       }
       evaluate(docLabels.size)
     }
   }
 
-  /** Resample a word in the rejuvenation sequence */
-  def resampleRejuvSeqWord(tokenIdx: Int, currVocabSize: Int): Unit = {
-    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
-    val docVect = rejuvSeqDocVects(tokenIdx)
-    val priorTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
-    val cdf = posterior(
-      new IncrementalStats(globalVect, docVect, priorTopic, word),
-      currVocabSize)
-    val sampledTopic = Stats.sampleCategorical(cdf)
-
-    assignNewTopic(tokenIdx, sampledTopic)
-    docLabels(docIdx) = docLabel(rejuvSeqDocVects(tokenIdx))
-  }
+  def tokenIdsToRejuvStats(tokenIds: Array[Int]):
+  Array[(IncrementalStats,CGStatsSetter)] =
+    tokenIds.map({tokenIdx =>
+      val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
+      val docVect = rejuvSeqDocVects(tokenIdx)
+      (new IncrementalStats(assgStore, globalVect, docVect,
+          particleId, docIdx, wordIdx, word),
+        new RejuvenationStatsSetter(assgStore, globalVect, docVect, topics,
+          docLabels, particleId, docIdx, wordIdx, word))
+    })
 
   /** Proper deep copy of the particle */
   def copy(newParticleId: Int): Particle = {
@@ -588,16 +587,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle
   }
 
-  /** Assign new topic to token in rejuvenation sequence */
-  private def assignNewTopic(tokenIdx: Int, newTopic: Int) = {
-    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
-    val oldTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
-    val docVect = rejuvSeqDocVects(tokenIdx)
-    globalVect.resampledUpdate(word, oldTopic, newTopic)
-    docVect.resampledUpdate(oldTopic, newTopic)
-    assgStore.setTopic(particleId, docIdx, wordIdx, newTopic)
-  }
-
   /** Results in a number proportional to P(w_i|z_{i-1}, w_{i-1});
    specifically, we note that this probability is proportional to
    P(w_i|z_{i-1}^{(p)}) P(z_{i-1}^{(p)}|d_i). */
@@ -607,7 +596,7 @@ class Particle(val topics: Int, val initialWeight: Double,
                    t, currVocabSize)
     }.sum
 
-  private def posterior(stats: CollapsedGibbsSufficientStats,
+  private def posterior(stats: CGStatsGetter,
                         currVocabSize: Int): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
     (0 to topics-1).foreach { i =>
@@ -615,7 +604,7 @@ class Particle(val topics: Int, val initialWeight: Double,
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
-  private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
+  private def posteriorEqn(stats: CGStatsGetter,
                            topic: Int, currVocabSize: Int): Double =
     (((stats.numTimesWordAssignedTopic(topic) + beta)
             / (stats.numTimesTopicAssignedTotal(topic) + currVocabSize * beta))
@@ -623,11 +612,14 @@ class Particle(val topics: Int, val initialWeight: Double,
               / (stats.wordsInDoc + topics * alpha)))
 }
 
-trait CollapsedGibbsSufficientStats {
+trait CGStatsGetter {
   def numTimesWordAssignedTopic(topic: Int): Int
   def numTimesTopicAssignedTotal(topic: Int): Int
   def numTimesTopicOccursInDoc(topic: Int): Int
   def wordsInDoc: Int
+}
+
+trait MutableCGSufficientStats extends CGStatsGetter {
 }
 
 /** Generates stats for the posterior distribution
@@ -637,7 +629,7 @@ trait CollapsedGibbsSufficientStats {
   */
 class UpdateStats(globalVect: GlobalUpdateVector,
     docVect: DocumentUpdateVector,
-    word: String) extends CollapsedGibbsSufficientStats {
+    word: String) extends CGStatsGetter {
   override def numTimesWordAssignedTopic(topic: Int): Int =
     globalVect.numTimesWordAssignedTopic(word, topic)
   override def numTimesTopicAssignedTotal(topic: Int): Int =
@@ -653,13 +645,18 @@ class UpdateStats(globalVect: GlobalUpdateVector,
   * "Online Inference of Topics..." by Canini, Shi, Griffiths.
   * The relevant equation is eqn (3).
   */
-class IncrementalStats(globalVect: GlobalUpdateVector,
+class IncrementalStats(assgStore: AssignmentStore,
+    globalVect: GlobalUpdateVector,
     docVect: DocumentUpdateVector,
-    priorTopic: Int,
-    word: String) extends CollapsedGibbsSufficientStats {
+    particleId: Int,
+    docIdx: Int,
+    wordIdx: Int,
+    word: String) extends CGStatsGetter {
   private def counterHelper(count: Int, topic: Int): Int =
-    if (priorTopic == topic) Math.max(count - 1, 0)
-    else count
+    if (assgStore.getTopic(particleId, docIdx, wordIdx) == topic)
+      Math.max(count - 1, 0)
+    else
+      count
   override def numTimesWordAssignedTopic(topic: Int): Int =
     counterHelper(globalVect.numTimesWordAssignedTopic(word, topic), topic)
   override def numTimesTopicAssignedTotal(topic: Int): Int =
@@ -667,7 +664,37 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
   override def numTimesTopicOccursInDoc(topic: Int): Int =
     counterHelper(docVect.numTimesTopicOccursInDoc(topic), topic)
   override def wordsInDoc: Int =
-    counterHelper(docVect.wordsInDoc, priorTopic)
+    counterHelper(docVect.wordsInDoc,
+      assgStore.getTopic(particleId, docIdx, wordIdx))
+}
+
+trait CGStatsSetter {
+  def recomputeDocLabel: Unit
+  def assignNewTopic(topic: Int): Unit
+}
+
+class RejuvenationStatsSetter(assgStore: AssignmentStore,
+    globalVect: GlobalUpdateVector,
+    docVect: DocumentUpdateVector,
+    topics: Int,
+    docLabels: ArrayBuffer[Int],
+    particleId: Int,
+    docIdx: Int,
+    wordIdx: Int,
+    word: String) extends CGStatsSetter {
+  override def recomputeDocLabel: Unit = {
+    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
+    docLabels(docIdx) = (0 until topics).reduce({(t1, t2) =>
+      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
+    })
+  }
+  override def assignNewTopic(topic: Int) = {
+    val oldTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
+    globalVect.resampledUpdate(word, oldTopic, topic)
+    docVect.resampledUpdate(oldTopic, topic)
+    assgStore.setTopic(particleId, docIdx, wordIdx, topic)
+    recomputeDocLabel
+  }
 }
 
 /** Tracks update progress for the document-specific ITERATIVE update
