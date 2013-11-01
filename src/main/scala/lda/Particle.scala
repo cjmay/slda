@@ -518,8 +518,7 @@ class Particle(val topics: Int, val initialWeight: Double,
     if (tokenIdx != Constants.DidNotAddToSampler)
       rejuvSeqDocVects(tokenIdx) = currDocVect
 
-    val cdf = posterior(new UpdateStats(globalVect, currDocVect, word),
-                        currVocabSize)
+    val cdf = updatePosterior(word, currVocabSize)
     val sampledTopic = Stats.sampleCategorical(cdf)
     globalVect.update(word, sampledTopic)
     currDocVect.update(sampledTopic)
@@ -560,11 +559,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Resample a word in the rejuvenation sequence */
   def resampleRejuvSeqWord(tokenIdx: Int, currVocabSize: Int): Unit = {
     val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
-    val docVect = rejuvSeqDocVects(tokenIdx)
-    val priorTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
-    val cdf = posterior(
-      new IncrementalStats(globalVect, docVect, priorTopic, word),
-      currVocabSize)
+    val cdf = incrementalPosterior(tokenIdx, currVocabSize)
     val sampledTopic = Stats.sampleCategorical(cdf)
 
     assignNewTopic(tokenIdx, sampledTopic)
@@ -601,73 +596,80 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Results in a number proportional to P(w_i|z_{i-1}, w_{i-1});
    specifically, we note that this probability is proportional to
    P(w_i|z_{i-1}^{(p)}) P(z_{i-1}^{(p)}|d_i). */
-  private def unnormalizedPrior(word: String, currVocabSize: Int): Double =
-    (0 to topics-1).map { t =>
-      posteriorEqn(new UpdateStats(globalVect, currDocVect, word),
-                   t, currVocabSize)
-    }.sum
+  private def unnormalizedPrior(word: String, currVocabSize: Int): Double = {
+    var prOfWord = 0.0
+    (0 to topics-1).foreach { t => prOfWord += updateEqn(word, t, currVocabSize) }
+    prOfWord
+  }
 
-  private def posterior(stats: CollapsedGibbsSufficientStats,
-                        currVocabSize: Int): Array[Double] = {
+  /** Generates the normalized posterior distribution
+    * P(z_j|Z_{i-1}, w_i);
+    */
+  private def updatePosterior(word: String,
+                              currVocabSize: Int): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
     (0 to topics-1).foreach { i =>
-      unnormalizedCdf(i) = posteriorEqn(stats, i, currVocabSize) }
+      unnormalizedCdf(i) = updateEqn(word, i, currVocabSize) }
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
-  private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
-                           topic: Int, currVocabSize: Int): Double =
-    (((stats.numTimesWordAssignedTopic(topic) + beta)
-            / (stats.numTimesTopicAssignedTotal(topic) + currVocabSize * beta))
-      * ((stats.numTimesTopicOccursInDoc(topic) + alpha)
-              / (stats.wordsInDoc + topics * alpha)))
-}
+  /** Generates normalized incremental update posterior approximation
+    * distribution P(z_j|Z_{i\j}, w_i).  This normalized distribution is
+    * a distribution over all possible z_j in eqn 3 in Canini et al,
+    * "Online Inference of Topics ..."
+    */
+  private def incrementalPosterior(tokenIdx: Int,
+                                   currVocabSize: Int): Array[Double] = {
+    var unnormalizedCdf = Array.fill(topics)(0.0)
+    (0 to topics-1)foreach { i =>
+      unnormalizedCdf(i) = incrementalEqn(tokenIdx, i, currVocabSize) }
+    Stats.normalizeAndMakeCdf(unnormalizedCdf)
+  }
 
-trait CollapsedGibbsSufficientStats {
-  def numTimesWordAssignedTopic(topic: Int): Int
-  def numTimesTopicAssignedTotal(topic: Int): Int
-  def numTimesTopicOccursInDoc(topic: Int): Int
-  def wordsInDoc: Int
-}
+  /** Applies the o-LDA update equation from
+    * "Online Inference of Topics..." by Canini, Shi, Griffiths.
+    * The relevant equation is eqn (2).
+    */
+  private def updateEqn(word: String, topic: Int,
+                        currVocabSize: Int): Double = {
+    val globalUpdate = (globalVect.numTimesWordAssignedTopic(word, topic)
+                        + beta) /
+    (globalVect.numTimesTopicAssignedTotal(topic) + currVocabSize * beta)
 
-/** Generates stats for the posterior distribution
-  * P(z_j|Z_{i-1}, w_i); see
-  * "Online Inference of Topics..." by Canini, Shi, Griffiths.
-  * The relevant equation is eqn (2).
-  */
-class UpdateStats(globalVect: GlobalUpdateVector,
-    docVect: DocumentUpdateVector,
-    word: String) extends CollapsedGibbsSufficientStats {
-  override def numTimesWordAssignedTopic(topic: Int): Int =
-    globalVect.numTimesWordAssignedTopic(word, topic)
-  override def numTimesTopicAssignedTotal(topic: Int): Int =
-    globalVect.numTimesTopicAssignedTotal(topic)
-  override def numTimesTopicOccursInDoc(topic: Int): Int =
-    docVect.numTimesTopicOccursInDoc(topic)
-  override def wordsInDoc: Int =
-    docVect.wordsInDoc
-}
+    val docUpdate = (currDocVect.numTimesTopicOccursInDoc(topic) + alpha) /
+    (currDocVect.numWordsInDoc + topics * alpha)
+    globalUpdate * docUpdate
+  }
 
-/** Generates stats for the incremental posterior approximation
-  * distribution P(z_j|Z_{i\j}, w_i); see
-  * "Online Inference of Topics..." by Canini, Shi, Griffiths.
-  * The relevant equation is eqn (3).
-  */
-class IncrementalStats(globalVect: GlobalUpdateVector,
-    docVect: DocumentUpdateVector,
-    priorTopic: Int,
-    word: String) extends CollapsedGibbsSufficientStats {
-  private def counterHelper(count: Int, topic: Int): Int =
-    if (priorTopic == topic) Math.max(count - 1, 0)
-    else count
-  override def numTimesWordAssignedTopic(topic: Int): Int =
-    counterHelper(globalVect.numTimesWordAssignedTopic(word, topic), topic)
-  override def numTimesTopicAssignedTotal(topic: Int): Int =
-    counterHelper(globalVect.numTimesTopicAssignedTotal(topic), topic)
-  override def numTimesTopicOccursInDoc(topic: Int): Int =
-    counterHelper(docVect.numTimesTopicOccursInDoc(topic), topic)
-  override def wordsInDoc: Int =
-    counterHelper(docVect.wordsInDoc, priorTopic)
+  /** For some word and some `topic`, calculates number proportional to
+    * p(z_j|Z_{i\j}, W_i). this is given as eqn (3) in Canini et al,
+    * "Online Inference of Topics..."
+    */
+  private def incrementalEqn(tokenIdx: Int, topic: Int,
+                             currVocabSize: Int): Double = {
+    /** Return the count, less one if priorTopic is the same as topic
+      * (but never return less than zero).
+      */
+    def counterHelper(count: Int, priorTopic: Int): Int =
+      if (priorTopic == topic) Math.max(count - 1, 0)
+      else count
+
+    val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
+    val priorTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
+    val docVect = rejuvSeqDocVects(tokenIdx)
+
+    val globalUpdate =
+      (counterHelper(globalVect.numTimesWordAssignedTopic(word, topic),
+                     priorTopic) + beta) /
+      (counterHelper(globalVect.numTimesTopicAssignedTotal(topic),
+                     priorTopic) + currVocabSize * beta)
+    val docUpdate =
+      (counterHelper(docVect.numTimesTopicOccursInDoc(topic),
+                     priorTopic) + alpha) /
+      (Math.max(docVect.wordsInDoc - 1, 0) + topics * alpha)
+
+    globalUpdate * docUpdate
+  }
 }
 
 /** Tracks update progress for the document-specific ITERATIVE update
