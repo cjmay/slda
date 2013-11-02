@@ -27,6 +27,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   var currTokenNum = -1 // Just used for diagnostics
   var particles: ParticleStore = null
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
+  var inferentialSampler: InferentialGibbsSampler = null
 
   private def simpleFilter(str: String): Boolean = {
     val patt = new Regex("\\W");
@@ -35,7 +36,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
   /** Must be called before ingestDoc/ingestDocs */
   def initialize(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Int) => Unit): Unit = {
+      evaluate: (Iterable[Int]) => Unit): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
     vocab ++= docsTokens.flatten.toStream
 
@@ -49,18 +50,15 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       evaluate)
   }
 
-  // TODO
   def makeInferentialSampler(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Array[Int]) => Unit) = {
+      evaluate: (Iterable[Int]) => Unit): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
-    new InferentialGibbsSampler(T, alpha, beta, mcmcSteps, docsTokens,
-      evaluate)
+    inferentialSampler = new InferentialGibbsSampler(T, alpha, beta, mcmcSteps,
+      docsTokens, evaluate)
   }
 
-  // TODO
-  def infer(inferentialSampler: InferentialGibbsSampler): Unit = {
+  def infer: Unit =
     particles.infer(inferentialSampler, vocab.size)
-  }
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
 

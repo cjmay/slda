@@ -120,7 +120,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
                     currVocabSize: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
-      p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {}) // TODO
+      p.rejuvenate(sample, mcmcSteps, currVocabSize)
     }
   }
 
@@ -132,7 +132,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
                  currVocabSize: Int, reservoirSize: Int,
-                 evaluate: (Int) => Unit): Unit = {
+                 evaluate: (Iterable[Int]) => Unit): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
     // Add initial tokens to reservoir
@@ -148,7 +148,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize, evaluate)
+    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    evaluate(p.docLabels)
 
     println("* transitioning to particle filter")
 
@@ -556,12 +557,11 @@ class Particle(val topics: Int, val initialWeight: Double,
     * rejuvenation sequence and iterating for mcmcSteps.
     */
   def rejuvenate(tokenIds: Array[Int], mcmcSteps: Int,
-                 currVocabSize: Int, evaluate: (Int) => Unit): Unit = {
+                 currVocabSize: Int): Unit = {
     for (i <- 1 to mcmcSteps) {
       tokenIds.foreach{ tokenIdx =>
         resampleRejuvSeqWord(tokenIdx, currVocabSize)
       }
-      evaluate(docLabels.size) // TODO
     }
   }
 
@@ -596,7 +596,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle
   }
 
-  // TODO
   def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
   Unit =
     inferentialSampler.infer(globalVect, currVocabSize)
@@ -685,7 +684,7 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     mcmcSteps: Int, docs: Array[Array[String]], 
-    evaluate: (Array[Int]) => Unit) {
+    evaluate: (Iterable[Int]) => Unit) {
   val docLabels: Array[Int] = Array.fill(docs.size)(0)
   val docVectors: Array[DocumentUpdateVector] = docs.map({doc =>
     new DocumentUpdateVector(topics)
@@ -729,7 +728,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
       }
     }
 
-    evaluate(docLabels)
+    evaluate(docLabels.toIterable)
   }
 
   private def docLabel(docVect: DocumentUpdateVector): Int = {

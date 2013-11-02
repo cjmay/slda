@@ -15,6 +15,8 @@ abstract class RunLdaParams {
   val initialBatchMcmcSteps: Int = 150
   val corpus: Array[String]
   val labels: Array[String]
+  val testCorpus: Array[String]
+  val testLabels: Array[String]
   val cats: List[String]
   val seed: Long
   val fixInitialSample: Boolean = true
@@ -24,19 +26,19 @@ abstract class RunLdaParams {
 object Sim3PfParams extends RunLdaParams {
   val initialBatchSize = 177 // number of docs for batch MCMC init
   val seed = 43L
-  val (corpus, labels, cats) = wrangle.TNG.sim3
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.sim3
 }
 
 object Rel3PfParams extends RunLdaParams {
   val initialBatchSize = 158 // number of docs for batch MCMC init
   val seed = 23L
-  val (corpus, labels, cats) = wrangle.TNG.rel3
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.rel3
 }
 
 object Diff3PfParams extends RunLdaParams {
   val initialBatchSize = 167 // number of docs for batch MCMC init
   val seed = 21L
-  val (corpus, labels, cats) = wrangle.TNG.diff3
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.diff3
 }
 
 object RunLda {
@@ -69,16 +71,23 @@ object RunLda {
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
 
-    val evaluate = (docIdx: Int) =>
-      Evaluation.writeOut(model, labels.slice(0, docIdx+1),
-                          params.cats,
-                          DataConsts.RESULTS_DIR + docIdx.toString() + ".txt")
+    model.makeInferentialSampler(params.testCorpus, 2, // TODO
+      (docLabels: Iterable[Int]) =>
+        println(Evaluation.nmi(
+          docLabels, params.testLabels,
+          params.cats.size, params.cats)))
+
+    val evaluate = (docLabels: Iterable[Int]) =>
+      println(Evaluation.nmi(
+        docLabels, labels.take(docLabels.size),
+        params.cats.size, params.cats))
 
     // TODO: what if batch size is bigger than corpus?
     model.initialize(
       (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
       evaluate)
+    model.infer
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now
@@ -88,16 +97,9 @@ object RunLda {
     println("running particle filter...")
     for (i <- params.initialBatchSize to corpus.length-1) {
       println("DOCUMENT " + i + " / " + corpus.length)
-      //val now = System.nanoTime
       model.ingestDoc(corpus(i))
-      // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
-      //println(i + " " + (System.nanoTime - now))
-      //if (docIdx % 10 == 0)
-        evaluate(i)
+      model.infer
     }
     model.writeTopics("results.txt")
-
-    val mis = Evaluation.nmi(model, labels, params.cats)
-    println(mis.deep)
   }
 }

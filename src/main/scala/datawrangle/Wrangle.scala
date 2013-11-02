@@ -110,6 +110,7 @@ object DataConsts {
   val RESULTS_DIR = "results/"
   val DATA_DIR = "data/"
   val TNG_TRAIN_DIR = DATA_DIR + "20news-bydate-train/"
+  val TNG_TEST_DIR = DATA_DIR + "20news-bydate-test/"
   val TNG_WHITELIST = DATA_DIR + "TNG_WHITELIST"
   val TNG_STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
 }
@@ -118,13 +119,21 @@ object DataConsts {
  */
 object TNG {
   private def loadCategories(categories: List[String]):
-  (Array[String], Array[String], List[String]) = {
+  (Array[String], Array[String], Array[String], Array[String], List[String]) = {
     val docCatPairs = categories.map({category =>
       Io.rawCorpus(wrangle.DataConsts.TNG_TRAIN_DIR + category).map({doc =>
         (doc, category)
       })
     }).toArray.flatten
-    (docCatPairs.map(p => p._1), docCatPairs.map(p => p._2), categories)
+    val testDocCatPairs = categories.map({category =>
+      Io.rawCorpus(wrangle.DataConsts.TNG_TEST_DIR + category).map({doc =>
+        (doc, category)
+      })
+    }).toArray.flatten
+
+    (docCatPairs.map(p => p._1), docCatPairs.map(p => p._2),
+      testDocCatPairs.map(p => p._1), testDocCatPairs.map(p => p._2),
+      categories)
   }
 
   def sim3 =
