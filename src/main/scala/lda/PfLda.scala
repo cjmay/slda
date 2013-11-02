@@ -62,17 +62,13 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
 
-  /** Ingest set of documents, updating LDA run as we go */
-  def ingestDocs(docs: Array[String]): Unit =
-    docs.foreach{ doc => ingestDoc(doc) }
-
   /** Ingest one document, update LDA as we go.
     * For each new word, we reweight the particles. Then we sample a
     * topic assignment from the posterior. Then if the 2norm of the
     * weight vector lies below a certain threshold, we resample the
     * topics
     */
-  def ingestDoc(doc: String): Int = {
+  def ingestDoc(doc: String, evaluate: (Iterable[Int]) => Unit): Int = {
     val words = makeBOW(doc)
 
     val docIdx = particles.newDocumentUpdateAll()
@@ -81,6 +77,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     if (words.length != 0) {
       println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
       println("NUMWORDS " + words.length)
+      particles.eval(evaluate)
     }
     println
 

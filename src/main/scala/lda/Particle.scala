@@ -26,7 +26,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   var currDocIdx = -1
   var (assgStore,particles) = initParticles()
 
-  // TODO
   def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
   Unit = {
     val p = particles.maxBy(candidate => candidate.getWeight)
@@ -64,6 +63,9 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     Stats.normalize(weights)
     for (i <- 0 to numParticles-1) particles(i).weight = weights(i)
   }
+
+  def eval(evaluate: (Iterable[Int]) => Unit): Unit =
+    particles.maxBy(p => p.getWeight).eval(evaluate)
 
   /** Transition every particle (see Particle.transition(...)) */
   def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
@@ -513,6 +515,9 @@ class Particle(val topics: Int, val initialWeight: Double,
     weight = weight * prior
     weight
   }
+
+  def eval(evaluate: (Iterable[Int]) => Unit): Unit =
+    evaluate(docLabels)
 
   /** "Transitions" particle to next state by sampling topic for `word`,
     * which is our new observation.  Returns that topic.

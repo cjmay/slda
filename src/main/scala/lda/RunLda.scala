@@ -77,17 +77,18 @@ object RunLda {
           docLabels, params.testLabels,
           params.cats.size, params.cats)))
 
-    val evaluate = (docLabels: Iterable[Int]) =>
+    val evaluate = {(docLabels: Iterable[Int]) =>
       println(Evaluation.nmi(
         docLabels, labels.take(docLabels.size),
         params.cats.size, params.cats))
+      model.infer
+    }
 
     // TODO: what if batch size is bigger than corpus?
     model.initialize(
       (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
       evaluate)
-    model.infer
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now
@@ -97,8 +98,7 @@ object RunLda {
     println("running particle filter...")
     for (i <- params.initialBatchSize to corpus.length-1) {
       println("DOCUMENT " + i + " / " + corpus.length)
-      model.ingestDoc(corpus(i))
-      model.infer
+      model.ingestDoc(corpus(i), evaluate)
     }
     model.writeTopics("results.txt")
   }

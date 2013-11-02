@@ -7,8 +7,6 @@ import scala.io.Source
 import scala.annotation.tailrec
 import java.io.File
 
-import lda.Stats
-
 
 /** Handles basic IO for our little package */
 object Io {
