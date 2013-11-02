@@ -72,12 +72,6 @@ object RunLda {
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
 
-    model.makeInferentialSampler(params.testCorpus, params.inferMcmcSteps,
-      (docLabels: Iterable[Int]) =>
-        println(Evaluation.nmi(
-          docLabels, params.testLabels,
-          params.cats.size, params.cats)))
-
     val evaluate = {(docLabels: Iterable[Int]) =>
       println(Evaluation.nmi(
         docLabels, labels.take(docLabels.size),
@@ -89,7 +83,13 @@ object RunLda {
     model.initialize(
       (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
-      evaluate)
+      evaluate,
+      params.testCorpus,
+      params.inferMcmcSteps,
+      (docLabels: Iterable[Int]) =>
+        println(Evaluation.nmi(
+          docLabels, params.testLabels,
+          params.cats.size, params.cats)))
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now

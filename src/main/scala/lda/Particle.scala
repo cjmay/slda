@@ -1,8 +1,8 @@
 package lda
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{ ArrayBuffer => ArrayBuffer }
-import scala.collection.mutable.{ HashMap => HashMap }
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.HashMap
 
 import globals.Constants
 import stream._

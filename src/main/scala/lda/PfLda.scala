@@ -1,7 +1,7 @@
 package lda
 
 import java.io.PrintWriter
-import scala.collection.mutable.{ HashSet => HashSet }
+import scala.collection.mutable.HashSet
 import scala.util.matching.Regex
 
 import globals.Constants
@@ -36,7 +36,9 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
   /** Must be called before ingestDoc/ingestDocs */
   def initialize(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Iterable[Int]) => Unit): Unit = {
+      evaluate: (Iterable[Int]) => Unit,
+      inferDocs: Array[String], inferMcmcSteps: Int,
+      inferEvaluate: (Iterable[Int]) => Unit): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
     vocab ++= docsTokens.flatten.toStream
 
@@ -46,15 +48,12 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     particles = new ParticleStore(T, alpha, beta, numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
+    val inferDocsTokens = inferDocs.map(makeBOW(_)).toArray
+    inferentialSampler = new InferentialGibbsSampler(T, alpha, beta,
+      inferMcmcSteps, inferDocsTokens, inferEvaluate)
+
     particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
       evaluate)
-  }
-
-  def makeInferentialSampler(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Iterable[Int]) => Unit): Unit = {
-    val docsTokens = docs.map(makeBOW(_)).toArray
-    inferentialSampler = new InferentialGibbsSampler(T, alpha, beta, mcmcSteps,
-      docsTokens, evaluate)
   }
 
   def infer: Unit =
