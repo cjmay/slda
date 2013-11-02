@@ -21,6 +21,7 @@ abstract class RunLdaParams {
   val seed: Long
   val fixInitialSample: Boolean = true
   val fixInitialModel: Boolean = true
+  val inferMcmcSteps: Int = 2
 }
 
 object Sim3PfParams extends RunLdaParams {
@@ -71,7 +72,7 @@ object RunLda {
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
 
-    model.makeInferentialSampler(params.testCorpus, 2, // TODO
+    model.makeInferentialSampler(params.testCorpus, params.inferMcmcSteps,
       (docLabels: Iterable[Int]) =>
         println(Evaluation.nmi(
           docLabels, params.testLabels,
