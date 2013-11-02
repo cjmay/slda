@@ -26,6 +26,13 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   var currDocIdx = -1
   var (assgStore,particles) = initParticles()
 
+  // TODO
+  def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
+  Unit = {
+    val p = particles.maxBy(candidate => candidate.getWeight)
+    p.infer(inferentialSampler, currVocabSize)
+  }
+
   /** Creates all the particles (requested by `numParticles` parameter),
     * as the corresponding entry in the AssignmentStore that tracks the
     * topic assignments of the words for each particle.
@@ -462,6 +469,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty
 
   def id: Int = particleId
+  def getWeight: Double = weight
 
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new
@@ -588,6 +596,11 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle
   }
 
+  // TODO
+  def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
+  Unit =
+    inferentialSampler.infer(globalVect, currVocabSize)
+
   /** Assign new topic to token in rejuvenation sequence */
   private def assignNewTopic(tokenIdx: Int, newTopic: Int) = {
     val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
@@ -670,35 +683,38 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
     counterHelper(docVect.wordsInDoc, priorTopic)
 }
 
-class InferentialGibbsSampler(topics: Int, currVocabSize: Int,
-    alpha: Double, beta: Double, globalVect: GlobalUpdateVector) {
-  // TODO allocate mem only once
-  def infer(docs: Array[Array[String]], mcmcSteps: Int,
-      evaluate: (Array[Int]) => Unit) = {
-    val docLabels: Array[Int] = Array.fill(docs.size)(0)
-    val docVectors: Array[DocumentUpdateVector] = docs.map({doc =>
-      new DocumentUpdateVector(topics)
-    })
-    val assignments: Array[Array[Int]] = (0 until docs.size).map({docIdx =>
+class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
+    mcmcSteps: Int, docs: Array[Array[String]], 
+    evaluate: (Array[Int]) => Unit) {
+  val docLabels: Array[Int] = Array.fill(docs.size)(0)
+  val docVectors: Array[DocumentUpdateVector] = docs.map({doc =>
+    new DocumentUpdateVector(topics)
+  })
+  val assignments: Array[Array[Int]] = docs.map({doc =>
+    Array.fill(doc.size)(0)
+  })
+
+  def infer(globalVect: GlobalUpdateVector, currVocabSize: Int) = {
+    for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
+      val docAssignments = assignments(docIdx)
       val docVect = docVectors(docIdx)
-      val docAssignments = doc.map({word =>
+      for (wordIdx <- 0 until doc.size) {
+        val word = doc(wordIdx)
         val cdf = posterior(new UpdateStats(globalVect, docVect, word),
                             currVocabSize)
         val sampledTopic = Stats.sampleCategorical(cdf)
-        //globalVect.update(word, sampledTopic) //TODO
+        docAssignments(wordIdx) = sampledTopic
         docVect.update(sampledTopic)
-        sampledTopic
-      })
+      }
       docLabels(docIdx) = docLabel(docVect)
-      docAssignments
-    }).toArray
+    }
 
     for (t <- 1 to mcmcSteps) {
       for (docIdx <- 0 until docs.size) {
-        val docVect = docVectors(docIdx)
         val doc = docs(docIdx)
         val docAssignments = assignments(docIdx)
+        val docVect = docVectors(docIdx)
         for (wordIdx <- 0 until doc.size) {
           val word = doc(wordIdx)
           val priorTopic = docAssignments(wordIdx)

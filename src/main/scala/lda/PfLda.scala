@@ -49,6 +49,19 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       evaluate)
   }
 
+  // TODO
+  def makeInferentialSampler(docs: Array[String], mcmcSteps: Int,
+      evaluate: (Array[Int]) => Unit) = {
+    val docsTokens = docs.map(makeBOW(_)).toArray
+    new InferentialGibbsSampler(T, alpha, beta, mcmcSteps, docsTokens,
+      evaluate)
+  }
+
+  // TODO
+  def infer(inferentialSampler: InferentialGibbsSampler): Unit = {
+    particles.infer(inferentialSampler, vocab.size)
+  }
+
   def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
 
   /** Ingest set of documents, updating LDA run as we go */
