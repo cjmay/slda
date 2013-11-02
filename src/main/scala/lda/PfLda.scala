@@ -29,6 +29,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
   var inferentialSampler: InferentialGibbsSampler = null
 
+  /** Return true iff string is nonempty and not in Blacklist */
   private def simpleFilter(str: String): Boolean = {
     val patt = new Regex("\\W");
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
@@ -65,10 +66,16 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       evaluate)
   }
 
+  /** Infer topic assignments on test documents and evaluate against
+    * gold standard.
+    */
   def infer: Unit =
-    particles.infer(inferentialSampler, vocab.size)
+    inferentialSampler.infer(
+      particles.maxPosteriorParticle.getGlobalVect,
+      vocab.size)
 
-  def makeBOW(doc: String) = Text.bow(doc, simpleFilter(_))
+  /** Tokenize doc and remove stop words */
+  def makeBOW(doc: String): Array[String] = Text.bow(doc, simpleFilter(_))
 
   /** Ingest one document, update LDA as we go.
     * For each new word, we reweight the particles. Then we sample a

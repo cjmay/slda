@@ -26,11 +26,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   var currDocIdx = -1
   var (assgStore,particles) = initParticles()
 
-  def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
-  Unit = {
-    val p = particles.maxBy(candidate => candidate.getWeight)
-    p.infer(inferentialSampler, currVocabSize)
-  }
+  def maxPosteriorParticle: Particle = particles.maxBy(p => p.getWeight)
 
   /** Creates all the particles (requested by `numParticles` parameter),
     * as the corresponding entry in the AssignmentStore that tracks the
@@ -473,6 +469,7 @@ class Particle(val topics: Int, val initialWeight: Double,
 
   def id: Int = particleId
   def getWeight: Double = weight
+  def getGlobalVect: GlobalUpdateVector = globalVect
 
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new
@@ -600,10 +597,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     })
     copiedParticle
   }
-
-  def infer(inferentialSampler: InferentialGibbsSampler, currVocabSize: Int):
-  Unit =
-    inferentialSampler.infer(globalVect, currVocabSize)
 
   /** Assign new topic to token in rejuvenation sequence */
   private def assignNewTopic(tokenIdx: Int, newTopic: Int) = {
