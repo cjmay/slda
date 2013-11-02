@@ -113,7 +113,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
                     currVocabSize: Int): Unit = {
     val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
-      p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {})
+      p.rejuvenate(sample, mcmcSteps, currVocabSize, (docIdx: Int) => {}) // TODO
     }
   }
 
@@ -553,7 +553,7 @@ class Particle(val topics: Int, val initialWeight: Double,
       tokenIds.foreach{ tokenIdx =>
         resampleRejuvSeqWord(tokenIdx, currVocabSize)
       }
-      evaluate(docLabels.size)
+      evaluate(docLabels.size) // TODO
     }
   }
 
