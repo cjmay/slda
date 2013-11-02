@@ -670,6 +670,75 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
     counterHelper(docVect.wordsInDoc, priorTopic)
 }
 
+class InferentialGibbsSampler(topics: Int, currVocabSize: Int,
+    alpha: Double, beta: Double, globalVect: GlobalUpdateVector) {
+  // TODO allocate mem only once
+  def infer(docs: Array[Array[String]], mcmcSteps: Int,
+      evaluate: (Array[Int]) => Unit) = {
+    val docLabels: Array[Int] = Array.fill(docs.size)(0)
+    val docVectors: Array[DocumentUpdateVector] = docs.map({doc =>
+      new DocumentUpdateVector(topics)
+    })
+    val assignments: Array[Array[Int]] = (0 until docs.size).map({docIdx =>
+      val doc = docs(docIdx)
+      val docVect = docVectors(docIdx)
+      val docAssignments = doc.map({word =>
+        val cdf = posterior(new UpdateStats(globalVect, docVect, word),
+                            currVocabSize)
+        val sampledTopic = Stats.sampleCategorical(cdf)
+        //globalVect.update(word, sampledTopic) //TODO
+        docVect.update(sampledTopic)
+        sampledTopic
+      })
+      docLabels(docIdx) = docLabel(docVect)
+      docAssignments
+    }).toArray
+
+    for (t <- 1 to mcmcSteps) {
+      for (docIdx <- 0 until docs.size) {
+        val docVect = docVectors(docIdx)
+        val doc = docs(docIdx)
+        val docAssignments = assignments(docIdx)
+        for (wordIdx <- 0 until doc.size) {
+          val word = doc(wordIdx)
+          val priorTopic = docAssignments(wordIdx)
+          val cdf = posterior(
+            new IncrementalStats(globalVect, docVect, priorTopic, word),
+            currVocabSize)
+          val sampledTopic = Stats.sampleCategorical(cdf)
+          docAssignments(wordIdx) = sampledTopic
+          docVect.resampledUpdate(priorTopic, sampledTopic)
+        }
+        docLabels(docIdx) = docLabel(docVect)
+      }
+    }
+
+    evaluate(docLabels)
+  }
+
+  private def docLabel(docVect: DocumentUpdateVector): Int = {
+    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
+    (0 until topics).reduce({(t1, t2) =>
+      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
+    })
+  }
+
+  private def posterior(stats: CollapsedGibbsSufficientStats,
+      currVocabSize: Int): Array[Double] = {
+    var unnormalizedCdf = Array.fill(topics)(0.0)
+    (0 to topics-1).foreach { i =>
+      unnormalizedCdf(i) = posteriorEqn(stats, i, currVocabSize) }
+    Stats.normalizeAndMakeCdf(unnormalizedCdf)
+  }
+
+  private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
+                           topic: Int, currVocabSize: Int): Double =
+    (((stats.numTimesWordAssignedTopic(topic) + beta)
+            / (stats.numTimesTopicAssignedTotal(topic) + currVocabSize * beta))
+      * ((stats.numTimesTopicOccursInDoc(topic) + alpha)
+              / (stats.wordsInDoc + topics * alpha)))
+}
+
 /** Tracks update progress for the document-specific ITERATIVE update
   * equation of the particle filtered LDA implementation.
   */
