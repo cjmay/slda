@@ -7,6 +7,7 @@ import scala.util.matching.Regex
 import globals.Constants
 import stream._
 import wrangle._
+import evaluation._
 
 /** Particle filter-based Gibbs sampler for LDA.
  *
@@ -27,7 +28,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   var currTokenNum = -1 // Just used for diagnostics
   var particles: ParticleStore = null
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
-  var inferentialSampler: InferentialGibbsSampler = null
 
   /** Return true iff string is nonempty and not in Blacklist */
   private def simpleFilter(str: String): Boolean = {
@@ -35,21 +35,11 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
   }
 
-  /** Initialize model without providing any test documents 
-    * (convenience interface)
+  /** Initialize model with batch MCMC.
+    * Must be called before ingestDoc/ingestDocs.
     */
-  def initialize(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Iterable[Int]) => Unit): Unit =
-    initialize(Array.empty, 0, (docLabels: Iterable[Int]) => {})
-
-  /** Initialize model with batch MCMC, providing test documents
-    * for evaluation.  Must be called before ingestDoc/ingestDocs.
-    */
-  def initialize(docs: Array[String], mcmcSteps: Int,
-      evaluate: (Iterable[Int]) => Unit,
-      inferDocs: Array[String], inferMcmcSteps: Int, inferJoint: Boolean,
-      inferEvaluate: (Iterable[Int]) => Unit): Unit = {
-    val docsTokens = docs.map(makeBOW(_)).toArray
+  def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
+    val docsTokens = docs.map(makeBOW(_))
     vocab ++= docsTokens.flatten.toStream
 
     val totalNumTokens = docsTokens.map(_.size).sum
@@ -58,21 +48,8 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     particles = new ParticleStore(T, alpha, beta, numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
-    val inferDocsTokens = inferDocs.map(makeBOW(_)).toArray
-    inferentialSampler = new InferentialGibbsSampler(T, alpha, beta,
-      inferMcmcSteps, inferDocsTokens, inferJoint, inferEvaluate)
-
-    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
-      evaluate)
+    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize)
   }
-
-  /** Infer topic assignments on test documents and evaluate against
-    * gold standard.
-    */
-  def infer: Unit =
-    inferentialSampler.infer(
-      particles.maxPosteriorParticle.getGlobalVect,
-      vocab.size)
 
   /** Tokenize doc and remove stop words */
   def makeBOW(doc: String): Array[String] = Text.bow(doc, simpleFilter(_))
@@ -83,17 +60,19 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * weight vector lies below a certain threshold, we resample the
     * topics
     */
-  def ingestDoc(doc: String, evaluate: (Iterable[Int]) => Unit): Int = {
+  def ingestDoc(doc: String, evaluator: DualEvaluator): Int = {
     val words = makeBOW(doc)
 
     val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
-    (0 to words.length-1).foreach{ i => processWord(i, words, docIdx) }
+    (0 until words.length).foreach { i =>
+      processWord(i, words, docIdx, evaluator)
+    }
     if (words.length != 0) {
       println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
       println("NUMWORDS " + words.length)
-      particles.eval(evaluate)
     }
+
     println
 
     docIdx
@@ -102,13 +81,21 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   /** Process the ith entry in `words`; copied pretty much verbatim from
     * Algorithm 4 of Canini, et al "Online Inference of Topics..."
     */
-  private def processWord(i: Int, words: Array[String], docIdx: Int): Unit = {
+  private def processWord(i: Int, words: Array[String], docIdx: Int,
+      evaluator: DualEvaluator): Unit = {
     val word = words(i)
     vocab += word
     currTokenNum += 1
 
-    // TODO why reweight before transition?
     particles.unnormalizedReweightAll(word, vocab.size)
+
+    // TODO need to evaluate at end, somehow... what are weights then?
+    if (i == 0) {
+      val p = particles.maxPosteriorParticle
+      evaluator.inSampleEval(p.docLabels)
+      evaluator.outOfSampleEval(p.globalVect, vocab.size)
+    }
+
     particles.transitionAll(i, words(i), vocab.size, docIdx)
     particles.normalizeWeights()
 

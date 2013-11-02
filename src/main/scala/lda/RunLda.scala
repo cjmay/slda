@@ -20,7 +20,7 @@ abstract class RunLdaParams {
   val cats: List[String]
   val seed: Long
   val fixInitialSample: Boolean = true
-  val fixInitialModel: Boolean = false
+  val fixInitialModel: Boolean = true
   val inferMcmcSteps: Int = 5
   val inferJoint: Boolean = false
 }
@@ -73,25 +73,17 @@ object RunLda {
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
 
-    val evaluate = {(docLabels: Iterable[Int]) =>
-      println(Evaluation.nmi(
-        docLabels, labels.take(docLabels.size),
-        params.cats.size, params.cats))
-      model.infer
-    }
-
     val initialBatchSize = Math.min(params.initialBatchSize, corpus.length)
     model.initialize(
       (0 until initialBatchSize).map(corpus(_)).toArray,
-      params.initialBatchMcmcSteps,
-      evaluate,
-      params.testCorpus,
-      params.inferMcmcSteps,
-      params.inferJoint,
-      (docLabels: Iterable[Int]) =>
-        println(Evaluation.nmi(
-          docLabels, params.testLabels,
-          params.cats.size, params.cats)))
+      params.initialBatchMcmcSteps)
+
+    val inferDocsTokens = params.testCorpus.map(model.makeBOW(_))
+    var inferentialSampler = new InferentialGibbsSampler(params.cats.size,
+      params.alpha, params.beta, params.inferMcmcSteps, inferDocsTokens,
+      params.inferJoint)
+    val evaluator = new DualEvaluator(params.cats.size, params.cats,
+      labels, params.testLabels, inferentialSampler)
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now
@@ -101,7 +93,7 @@ object RunLda {
     println("running particle filter...")
     for (i <- initialBatchSize until corpus.length) {
       println("DOCUMENT " + i + " / " + corpus.length)
-      model.ingestDoc(corpus(i), evaluate)
+      model.ingestDoc(corpus(i), evaluator)
     }
     model.writeTopics("results.txt")
   }

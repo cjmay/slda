@@ -26,7 +26,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   var currDocIdx = -1
   var (assgStore,particles) = initParticles()
 
-  def maxPosteriorParticle: Particle = particles.maxBy(p => p.getWeight)
+  def maxPosteriorParticle: Particle = particles.maxBy(p => p.weight)
 
   /** Creates all the particles (requested by `numParticles` parameter),
     * as the corresponding entry in the AssignmentStore that tracks the
@@ -59,9 +59,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     Stats.normalize(weights)
     for (i <- 0 to numParticles-1) particles(i).weight = weights(i)
   }
-
-  def eval(evaluate: (Iterable[Int]) => Unit): Unit =
-    particles.maxBy(p => p.getWeight).eval(evaluate)
 
   /** Transition every particle (see Particle.transition(...)) */
   def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
@@ -104,7 +101,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def resampleAndRejuvenate(tokenIds: Array[Int], currVocabSize: Int): Unit = {
     // resample particles and prune tree
-    val prevParticleIds = particles.map(_.id)
+    val prevParticleIds = particles.map(_.particleId)
     resample(particleWeightArray)
     assgStore.prune(prevParticleIds)
 
@@ -129,8 +126,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * update data structures to prepare for particle filtering.
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
-                 currVocabSize: Int, reservoirSize: Int,
-                 evaluate: (Iterable[Int]) => Unit): Unit = {
+                 currVocabSize: Int, reservoirSize: Int): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
     // Add initial tokens to reservoir
@@ -147,7 +143,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
 
     // Do initial batch iterations
     p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
-    evaluate(p.docLabels)
 
     println("* transitioning to particle filter")
 
@@ -467,10 +462,6 @@ class Particle(val topics: Int, val initialWeight: Double,
   var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
   var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty
 
-  def id: Int = particleId
-  def getWeight: Double = weight
-  def getGlobalVect: GlobalUpdateVector = globalVect
-
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new
     * rejuvenation sequence positions to old rejuvenation sequence
@@ -512,9 +503,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     weight = weight * prior
     weight
   }
-
-  def eval(evaluate: (Iterable[Int]) => Unit): Unit =
-    evaluate(docLabels)
 
   /** "Transitions" particle to next state by sampling topic for `word`,
     * which is our new observation.  Returns that topic.
@@ -681,15 +669,15 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 }
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
-    mcmcSteps: Int, docs: Array[Array[String]], joint: Boolean,
-    evaluate: (Iterable[Int]) => Unit) {
+    mcmcSteps: Int, docs: Array[Array[String]], joint: Boolean) {
   val docLabels: Array[Int] = Array.fill(docs.size)(0)
   val docVectors: Array[DocumentUpdateVector] = Array.fill(docs.size)(null)
   val assignments: Array[Array[Int]] = docs.map({doc =>
     Array.fill(doc.size)(0)
   })
 
-  def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int) = {
+  def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int):
+  Iterable[Int] = {
     val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
     for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
@@ -727,7 +715,8 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         docLabels(docIdx) = docLabel(docVect)
       }
     }
-    evaluate(docLabels.toIterable)
+
+    docLabels.toIterable
   }
 
   private def docLabel(docVect: DocumentUpdateVector): Int = {

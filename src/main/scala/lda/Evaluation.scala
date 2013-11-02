@@ -11,8 +11,7 @@ import lda._
 
 object Evaluation {
   def mi(ourLabels: Iterable[Int], theirLabels: Array[String],
-         topics: Int, theirLabelTypes: Iterable[String]):
-  Double = {
+         topics: Int, theirLabelTypes: Iterable[String]): Double = {
     val n = ourLabels.size.toDouble
     var s = 0.0
     val outcomes = ourLabels.zip(theirLabels)
@@ -33,8 +32,7 @@ object Evaluation {
   }
 
   def entropies(ourLabels: Iterable[Int], theirLabels: Array[String],
-                topics: Int, theirLabelTypes: Iterable[String]):
-  Double = {
+                topics: Int, theirLabelTypes: Iterable[String]): Double = {
     val n = ourLabels.size.toDouble
     var ent1 = 0.0
     for (theirLabel <- theirLabelTypes) {
@@ -57,4 +55,27 @@ object Evaluation {
           topics: Int, labelTypes: Iterable[String]): Double =
     (2.0 * mi(ourLabels, theirLabels, topics, labelTypes) /
        entropies(ourLabels, theirLabels, topics, labelTypes))
+}
+
+
+class DualEvaluator(topics: Int,
+    cats: List[String],
+    inSampleLabels: Array[String],
+    outOfSampleLabels: Array[String],
+    inferentialSampler: InferentialGibbsSampler) {
+  val numCats = cats.size
+
+  def inSampleEval(labels: Iterable[Int]): Unit = {
+    println(Evaluation.nmi(
+      labels, inSampleLabels.take(labels.size),
+      numCats, cats))
+  }
+
+  def outOfSampleEval(globalVect: GlobalUpdateVector, currVocabSize: Int):
+  Unit = {
+    val labels = inferentialSampler.infer(globalVect, currVocabSize)
+    println(Evaluation.nmi(
+      labels, outOfSampleLabels.take(labels.size),
+      numCats, cats))
+  }
 }
