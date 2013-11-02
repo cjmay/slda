@@ -79,9 +79,9 @@ object RunLda {
       model.infer
     }
 
-    // TODO: what if batch size is bigger than corpus?
+    val initialBatchSize = Math.min(params.initialBatchSize, corpus.length)
     model.initialize(
-      (0 to params.initialBatchSize-1).map(corpus(_)).toArray,
+      (0 until initialBatchSize).map(corpus(_)).toArray,
       params.initialBatchMcmcSteps,
       evaluate,
       params.testCorpus,
@@ -97,7 +97,7 @@ object RunLda {
       Stats.setDefaultSeed()
 
     println("running particle filter...")
-    for (i <- params.initialBatchSize to corpus.length-1) {
+    for (i <- initialBatchSize until corpus.length) {
       println("DOCUMENT " + i + " / " + corpus.length)
       model.ingestDoc(corpus(i), evaluate)
     }
