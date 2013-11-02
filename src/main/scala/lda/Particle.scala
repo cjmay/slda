@@ -681,27 +681,28 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 }
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
-    mcmcSteps: Int, docs: Array[Array[String]], 
+    mcmcSteps: Int, docs: Array[Array[String]], joint: Boolean,
     evaluate: (Iterable[Int]) => Unit) {
   val docLabels: Array[Int] = Array.fill(docs.size)(0)
-  val docVectors: Array[DocumentUpdateVector] = docs.map({doc =>
-    new DocumentUpdateVector(topics)
-  })
+  val docVectors: Array[DocumentUpdateVector] = Array.fill(docs.size)(null)
   val assignments: Array[Array[Int]] = docs.map({doc =>
     Array.fill(doc.size)(0)
   })
 
-  def infer(globalVect: GlobalUpdateVector, currVocabSize: Int) = {
+  def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int) = {
+    val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
     for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
       val docAssignments = assignments(docIdx)
-      val docVect = docVectors(docIdx)
+      val docVect = new DocumentUpdateVector(topics)
+      docVectors(docIdx) = docVect
       for (wordIdx <- 0 until doc.size) {
         val word = doc(wordIdx)
         val cdf = posterior(new UpdateStats(globalVect, docVect, word),
                             currVocabSize)
         val sampledTopic = Stats.sampleCategorical(cdf)
         docAssignments(wordIdx) = sampledTopic
+        if (joint) globalVect.update(word, sampledTopic)
         docVect.update(sampledTopic)
       }
       docLabels(docIdx) = docLabel(docVect)
@@ -720,12 +721,12 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
             currVocabSize)
           val sampledTopic = Stats.sampleCategorical(cdf)
           docAssignments(wordIdx) = sampledTopic
+          if (joint) globalVect.resampledUpdate(word, priorTopic, sampledTopic)
           docVect.resampledUpdate(priorTopic, sampledTopic)
         }
         docLabels(docIdx) = docLabel(docVect)
       }
     }
-
     evaluate(docLabels.toIterable)
   }
 

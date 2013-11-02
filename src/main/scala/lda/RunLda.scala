@@ -21,7 +21,8 @@ abstract class RunLdaParams {
   val seed: Long
   val fixInitialSample: Boolean = true
   val fixInitialModel: Boolean = false
-  val inferMcmcSteps: Int = 2
+  val inferMcmcSteps: Int = 5
+  val inferJoint: Boolean = false
 }
 
 object Sim3PfParams extends RunLdaParams {
@@ -86,6 +87,7 @@ object RunLda {
       evaluate,
       params.testCorpus,
       params.inferMcmcSteps,
+      params.inferJoint,
       (docLabels: Iterable[Int]) =>
         println(Evaluation.nmi(
           docLabels, params.testLabels,

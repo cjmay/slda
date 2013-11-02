@@ -47,7 +47,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     */
   def initialize(docs: Array[String], mcmcSteps: Int,
       evaluate: (Iterable[Int]) => Unit,
-      inferDocs: Array[String], inferMcmcSteps: Int,
+      inferDocs: Array[String], inferMcmcSteps: Int, inferJoint: Boolean,
       inferEvaluate: (Iterable[Int]) => Unit): Unit = {
     val docsTokens = docs.map(makeBOW(_)).toArray
     vocab ++= docsTokens.flatten.toStream
@@ -60,7 +60,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
     val inferDocsTokens = inferDocs.map(makeBOW(_)).toArray
     inferentialSampler = new InferentialGibbsSampler(T, alpha, beta,
-      inferMcmcSteps, inferDocsTokens, inferEvaluate)
+      inferMcmcSteps, inferDocsTokens, inferJoint, inferEvaluate)
 
     particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
       evaluate)
