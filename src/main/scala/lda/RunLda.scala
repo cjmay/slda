@@ -20,7 +20,7 @@ abstract class RunLdaParams {
   val cats: List[String]
   val seed: Long
   val fixInitialSample: Boolean = true
-  val fixInitialModel: Boolean = true
+  val fixInitialModel: Boolean = false
   val inferMcmcSteps: Int = 2
 }
 

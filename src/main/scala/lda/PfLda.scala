@@ -34,7 +34,16 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
   }
 
-  /** Must be called before ingestDoc/ingestDocs */
+  /** Initialize model without providing any test documents 
+    * (convenience interface)
+    */
+  def initialize(docs: Array[String], mcmcSteps: Int,
+      evaluate: (Iterable[Int]) => Unit): Unit =
+    initialize(Array.empty, 0, (docLabels: Iterable[Int]) => {})
+
+  /** Initialize model with batch MCMC, providing test documents
+    * for evaluation.  Must be called before ingestDoc/ingestDocs.
+    */
   def initialize(docs: Array[String], mcmcSteps: Int,
       evaluate: (Iterable[Int]) => Unit,
       inferDocs: Array[String], inferMcmcSteps: Int,
