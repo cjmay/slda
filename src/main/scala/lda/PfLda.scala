@@ -78,6 +78,19 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     docIdx
   }
 
+  def evaluate(evaluator: DualEvaluator): Unit = {
+    // NOTE: if we do this immediately after ingestDoc or processWord
+    // we will probably just pick a random particle because weights
+    // have probably been reset to uniform (as last step in
+    // resampling process)
+    val p = particles.maxPosteriorParticle
+
+    print("IN-SAMPLE NMI ")
+    evaluator.inSampleEval(p.docLabels)
+    print("OUT-OF-SAMPLE NMI ")
+    evaluator.outOfSampleEval(p.globalVect, vocab.size)
+  }
+
   /** Process the ith entry in `words`; copied pretty much verbatim from
     * Algorithm 4 of Canini, et al "Online Inference of Topics..."
     */
@@ -89,12 +102,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
     particles.unnormalizedReweightAll(word, vocab.size)
 
-    // TODO need to evaluate at end, somehow... what are weights then?
-    if (i == 0) {
-      val p = particles.maxPosteriorParticle
-      evaluator.inSampleEval(p.docLabels)
-      evaluator.outOfSampleEval(p.globalVect, vocab.size)
-    }
+    if (i == 0) evaluate(evaluator)
 
     particles.transitionAll(i, words(i), vocab.size, docIdx)
     particles.normalizeWeights()

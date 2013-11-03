@@ -11,8 +11,6 @@ object Particle {
   type DocumentToken = Triple[Int,Int,String]
 }
 
-// TODO get rid of docIdx, docLabels (not truly streaming)
-
 /** A memory- and time-efficient way to represent particles, as detailed
   * in section 4 of Canini Shi Griffiths. Manages all the logic of
   * particle manipulation, copying, reading, etc
@@ -369,7 +367,6 @@ class AssignmentStore {
  space of a particular run of LDA. */
 class AssignmentMap {
   //particleId -> docId for reservoir sampler -> word idx -> topic assignments
-  // TODO turn into list of pairs?
   var assgMap = HashMap[Int,HashMap[Int,HashMap[Int,Int]]]()
 
   /** Checks to see if a particle contains a topic assignment for some
@@ -600,7 +597,7 @@ class Particle(val topics: Int, val initialWeight: Double,
    specifically, we note that this probability is proportional to
    P(w_i|z_{i-1}^{(p)}) P(z_{i-1}^{(p)}|d_i). */
   private def unnormalizedPrior(word: String, currVocabSize: Int): Double =
-    (0 to topics-1).map { t =>
+    (0 until topics).map { t =>
       posteriorEqn(new UpdateStats(globalVect, currDocVect, word),
                    t, currVocabSize)
     }.sum
@@ -608,7 +605,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   private def posterior(stats: CollapsedGibbsSufficientStats,
                         currVocabSize: Int): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
-    (0 to topics-1).foreach { i =>
+    (0 until topics).foreach { i =>
       unnormalizedCdf(i) = posteriorEqn(stats, i, currVocabSize) }
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
