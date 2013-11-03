@@ -6,7 +6,7 @@ import wrangle._
 abstract class RunLdaParams {
   val alpha: Double = 0.1
   val beta: Double = 0.1
-  val reservoirSize: Int = 100000
+  val reservoirSize: Int = 0
   val numParticles: Int = 100
   val ess: Double = 20.0
   val rejuvBatchSize: Int = 30
@@ -20,7 +20,7 @@ abstract class RunLdaParams {
   val cats: List[String]
   val seed: Long
   val fixInitialSample: Boolean = true
-  val fixInitialModel: Boolean = true
+  val fixInitialModel: Boolean = false
   val inferMcmcSteps: Int = 5
   val inferJoint: Boolean = false
 }
