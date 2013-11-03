@@ -11,7 +11,7 @@ abstract class RunLdaParams {
   val ess: Double = 20.0
   val rejuvBatchSize: Int = 30
   val rejuvMcmcSteps: Int = 20
-  val initialBatchSize: Int = 10
+  val initialBatchSize: Int = 100
   val initialBatchMcmcSteps: Int = 150
   val corpus: Array[String]
   val labels: Array[String]
