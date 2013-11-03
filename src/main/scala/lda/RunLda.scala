@@ -6,12 +6,12 @@ import wrangle._
 abstract class RunLdaParams {
   val alpha: Double = 0.1
   val beta: Double = 0.1
-  val reservoirSize: Int = 1000
+  val reservoirSize: Int = 100000
   val numParticles: Int = 100
   val ess: Double = 20.0
   val rejuvBatchSize: Int = 30
   val rejuvMcmcSteps: Int = 20
-  val initialBatchSize: Int = 0
+  val initialBatchSize: Int
   val initialBatchMcmcSteps: Int = 150
   val corpus: Array[String]
   val labels: Array[String]
@@ -26,16 +26,19 @@ abstract class RunLdaParams {
 }
 
 object Sim3PfParams extends RunLdaParams {
+  val initialBatchSize = 177 // number of docs for batch MCMC init
   val seed = 43L
   val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.sim3
 }
 
 object Rel3PfParams extends RunLdaParams {
+  val initialBatchSize = 158 // number of docs for batch MCMC init
   val seed = 23L
   val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.rel3
 }
 
 object Diff3PfParams extends RunLdaParams {
+  val initialBatchSize = 167 // number of docs for batch MCMC init
   val seed = 21L
   val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.diff3
 }
