@@ -124,23 +124,30 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * update data structures to prepare for particle filtering.
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
-                 currVocabSize: Int, reservoirSize: Int): Unit = {
+                 currVocabSize: Int, reservoirSize: Int,
+                 initPerParticle: Boolean): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
+    val particlesPerformingInit = if (initPerParticle)
+      particles
+    else
+      Array(particles(0))
+
     // Add initial tokens to reservoir
-    val p = particles(0)
     val allTokenIds = (0 to docs.size-1).map({docIdx =>
       val doc = docs(docIdx)
       val tokenIds = (0 to doc.size-1).map({wordIdx =>
         rejuvSeq.addItem(
           new Particle.DocumentToken(docIdx, wordIdx, doc(wordIdx)))._1
       }).toArray
-      p.newDocumentUpdateInitial(docIdx, tokenIds, doc)
+      for (p <- particlesPerformingInit)
+        p.newDocumentUpdateInitial(docIdx, tokenIds, doc)
       tokenIds
     }).toArray
 
     // Do initial batch iterations
-    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    for (p <- particlesPerformingInit)
+      p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
 
     println("* transitioning to particle filter")
 
@@ -179,22 +186,26 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     currDocIdx += docs.size // currDocIdx == -1 before this update
 
     // Inform particle 0 of new reservoir
-    p.remapRejuvSeq(newToOldRejuvSeqMap)
+    for (p <- particlesPerformingInit)
+      p.remapRejuvSeq(newToOldRejuvSeqMap)
 
     // Remove elements from assignment store that were removed from
     // reservoir
     for ((docIdx, wordIdx, word) <- removedTokens)
       assgStore.removeAll(docIdx, wordIdx)
 
-    // Clone particle 0 to create new particle set
-    particles = (0 to numParticles-1).toArray.map({
-      i => p.copy(newParticleId())
-    })
+    if (! initPerParticle) {
+      // Clone particle 0 to create new particle set
+      val p = particlesPerformingInit(0)
+      particles = (0 until numParticles).toArray.map({
+        i => p.copy(newParticleId())
+      })
 
-    // Rejuvenate to create particle diversity
-    val newTokenIds = (0 to rejuvSeq.occupied-1).toArray
-    rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
-    uniformReweightAll()
+      // Rejuvenate to create particle diversity
+      val newTokenIds = (0 to rejuvSeq.occupied-1).toArray
+      rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
+      uniformReweightAll()
+    }
   }
 
   /** Helper method puts the weights of particles into an array, so that
