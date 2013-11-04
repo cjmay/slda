@@ -61,6 +61,7 @@ object Evaluation {
 class DualEvaluator(topics: Int,
     cats: List[String],
     inSampleLabels: Array[String],
+    inSampleInitSize: Int,
     outOfSampleLabels: Array[String],
     inferentialSampler: InferentialGibbsSampler) {
   val numCats = cats.size
@@ -68,6 +69,13 @@ class DualEvaluator(topics: Int,
   def inSampleEval(labels: Iterable[Int]): Unit = {
     println(Evaluation.nmi(
       labels, inSampleLabels.take(labels.size),
+      numCats, cats))
+  }
+
+  def inSampleNonInitEval(labels: Iterable[Int]): Unit = {
+    println(Evaluation.nmi(
+      labels.slice(inSampleInitSize, labels.size),
+      inSampleLabels.slice(inSampleInitSize, labels.size),
       numCats, cats))
   }
 

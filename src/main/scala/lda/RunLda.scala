@@ -84,7 +84,7 @@ object RunLda {
       params.alpha, params.beta, params.inferMcmcSteps, inferDocsTokens,
       params.inferJoint)
     val evaluator = new DualEvaluator(params.cats.size, params.cats,
-      labels, params.testLabels, inferentialSampler)
+      labels, params.initialBatchSize, params.testLabels, inferentialSampler)
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now

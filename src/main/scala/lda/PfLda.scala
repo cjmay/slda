@@ -89,6 +89,8 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
     print("IN-SAMPLE NMI ")
     evaluator.inSampleEval(p.docLabels)
+    print("IN-SAMPLE-NON-INIT NMI ")
+    evaluator.inSampleNonInitEval(p.docLabels)
     print("OUT-OF-SAMPLE NMI ")
     evaluator.outOfSampleEval(p.globalVect, vocab.size)
   }
