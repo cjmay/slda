@@ -111,7 +111,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
     if (particles.shouldResample) {
       println("REJUVENATE " + currTokenNum)
-      particles.resampleAndRejuvenate((0 to rejuvSeq.occupied-1).toArray,
+      particles.resampleAndRejuvenate((0 until rejuvSeq.occupied).toArray,
         vocab.size)
     }
   }
