@@ -3,3 +3,7 @@ results/
 data/
 paper/
 project/
+core.*
+slda.*
+.*.swp
+.*.swo

@@ -1,12 +1,20 @@
 package lda
 
 import scala.annotation.tailrec
-import scala.util.{ Random => Random }
+import scala.util.Random
 
 import stream.ReservoirSampler
 
 object Stats {
-  val sampler = new Random()
+  var sampler = new Random()
+
+  def setDefaultSeed(): Unit = {
+    sampler = new Random()
+  }
+
+  def setSeed(seed: Long): Unit = {
+    sampler = new Random(seed)
+  }
 
   def sampleWithoutReplacement [T:Manifest](a: Array[T], k: Int): Array[T] = {
     val sample = new ReservoirSampler[T](k)
@@ -14,7 +22,10 @@ object Stats {
     sample.getSampleSet
   }
 
-  def normalize (arr: Array[Double]): Array[Double] = {
+  def shuffle[T](seq: Seq[T]): Seq[T] =
+    sampler.shuffle(seq)
+
+  def normalize(arr: Array[Double]): Array[Double] = {
     arr.length match {
       case 0 => arr
       case 1 => { arr(0) = 1; arr }
@@ -50,6 +61,9 @@ object Stats {
       }
     }
   }
+
+  def sampleInt(bound: Int): Int =
+    sampler.nextInt(bound)
   
   /** Samples from simple categorical distribution; takes a normalized
    probability measure and returns a randomly-sampled index */

@@ -5,7 +5,6 @@ package gibbs
 
 import scala.math
 import scala.annotation.tailrec
-import scala.util.{ Random => Random }
 import scala.collection.mutable.{ HashMap => HashMap }
 
 import lda.Stats
@@ -51,7 +50,7 @@ abstract class Gibbs (val docs: Array[String], val T: Int,
   val whitelist = Text.stopWords(DataConsts.TNG_WHITELIST)
   val (w, d) = Text.bow(docs, (str: String) => whitelist(str))
   val N = w.length
-  var z = Array.fill(N)(new Random().nextInt(T))
+  var z = Array.fill(N)(Stats.sampleInt(T))
   val wIdx = canonicalWordIndices(w)
   val W = wIdx.size
   var (allAssignedZ, wAssignedZ, allAssignedZInD) =

@@ -1,103 +1,102 @@
 package lda
 
-import scala.util.Random
-
 import evaluation._
 import wrangle._
 
-object Sim3PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 1768 // number of documents (total: 1768)
-  val numParticles = 100
-  val ess = 20 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
+abstract class RunLdaParams {
+  val alpha: Double = 0.1
+  val beta: Double = 0.1
+  val reservoirSize: Int = 100000
+  val numParticles: Int = 100
+  val ess: Double = 20.0
+  val rejuvBatchSize: Int = 30
+  val rejuvMcmcSteps: Int = 20
+  val initialBatchSize: Int
+  val initialBatchMcmcSteps: Int = 150
+  val corpus: Array[String]
+  val labels: Array[String]
+  val testCorpus: Array[String]
+  val testLabels: Array[String]
+  val cats: List[String]
+  val seed: Long
+  val fixInitialSample: Boolean = true
+  val fixInitialModel: Boolean = false
+  val inferMcmcSteps: Int = 5
+  val inferJoint: Boolean = false
+  val initPerParticle: Boolean = false
 }
 
-object Rel3PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 1575 // number of documents (total: 1575)
-  val numParticles = 100
-  val ess = 20 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
+object Sim3PfParams extends RunLdaParams {
+  val initialBatchSize = 177 // number of docs for batch MCMC init
+  val seed = 43L
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.sim3
 }
 
-object Diff3PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 1670 // number of documents (total: 1670)
-  val numParticles = 100
-  val ess = 10 // effective sample size threshold
-  val rejuvBatchSize = 10 // |R(i)|
-  val rejuvMcmcSteps = 20
+object Rel3PfParams extends RunLdaParams {
+  val initialBatchSize = 158 // number of docs for batch MCMC init
+  val seed = 23L
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.rel3
 }
 
-object Subset20PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
-  val numParticles = 100
-  val ess = 10 // effective sample size threshold
-  val rejuvBatchSize = 10 // |R(i)|
-  val rejuvMcmcSteps = 20
-}
-
-object Slash6PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
-  val numParticles = 100
-  val ess = 10 // effective sample size threshold
-  val rejuvBatchSize = 10 // |R(i)|
-  val rejuvMcmcSteps = 20
-}
-
-object Slash7PfParams {
-  val alpha = 0.1 // topic distribution prior
-  val beta = 0.1 // word distribution prior
-  val smplSize = 0 // number of documents
-  val numParticles = 100
-  val ess = 20 // effective sample size threshold
-  val rejuvBatchSize = 30 // |R(i)|
-  val rejuvMcmcSteps = 20
+object Diff3PfParams extends RunLdaParams {
+  val initialBatchSize = 167 // number of docs for batch MCMC init
+  val seed = 21L
+  val (corpus, labels, testCorpus, testLabels, cats) = wrangle.TNG.diff3
 }
 
 object RunLda {
   def main (args: Array[String]) {
+    val params: RunLdaParams = Diff3PfParams
+
+    if (params.fixInitialModel && ! params.fixInitialSample)
+      println("warning: fixInitialModel implies fixInitialSample")
+
+    // If we want to fix the random seed for the data shuffle or
+    // fix the seed for the Gibbs initialization---which implies
+    // a fixed seed for the data shuffle---we do so here
+    if (params.fixInitialSample || params.fixInitialModel)
+      Stats.setSeed(params.seed)
+
     println("loading corpus...")
-    var (corpus, labels, cats) = wrangle.TNG.sim3
-    // if we don't shuffle them, and if we don't shuffle them with the same seed,
-    // our NMI suffers greatly
-    corpus = (new Random(10)).shuffle(corpus.toSeq).toArray
-    labels = (new Random(10)).shuffle(labels.toSeq).toArray
-    println("building model...")
-    val model = new PfLda(cats, Sim3PfParams.alpha, Sim3PfParams.beta,
-                          Sim3PfParams.smplSize, Sim3PfParams.numParticles,
-                          Sim3PfParams.ess, Sim3PfParams.rejuvBatchSize,
-                          Sim3PfParams.rejuvMcmcSteps)
+    val docLabelPairs = Stats.shuffle(params.corpus.zip(params.labels).toSeq)
+    val (corpus, labels) =
+      (docLabelPairs.map(p => p._1).toArray,
+       docLabelPairs.map(p => p._2).toArray)
 
-    println("running model...")
-    println("DOCUMENT\t\t\tTIME CONSUMPTION PER WORD (MILLISECONDS)")
-    for (i <- 0 to corpus.length-1) {
-      print(i + " / " + corpus.length)
-      //val now = System.nanoTime
-      //println("doc " + i + " / " + (corpus.length-1))
-      // TODO: why not ingestDocs?  just because we want to print diagnostics?
-      model.ingestDoc(corpus(i))
-      // TODO: REMOVE HACKY TIMING CODE FOR BENCHMARKING IMPROVEMENTS
-      //println(i + " " + (System.nanoTime - now))
-      if (i % 100 == 0) {
-        Evaluation.writeOut(model, labels.slice(0, i),
-                            DataConsts.SIM_3_LABELS.slice(0, i),
-                            DataConsts.RESULTS_DIR +  i.toString() + ".txt")
-      }
+    // If we fixed a random seed for the data shuffle but want a random
+    // Gibbs initialization, reinitialize seed randomly
+    if (params.fixInitialSample && ! params.fixInitialModel)
+      Stats.setDefaultSeed()
+
+    println("initializing model...")
+    val model = new PfLda(params.cats.size, params.alpha, params.beta,
+                          params.reservoirSize, params.numParticles,
+                          params.ess, params.rejuvBatchSize,
+                          params.rejuvMcmcSteps)
+
+    val initialBatchSize = Math.min(params.initialBatchSize, corpus.length)
+    model.initialize(
+      (0 until initialBatchSize).map(corpus(_)).toArray,
+      params.initialBatchMcmcSteps, params.initPerParticle)
+
+    val inferDocsTokens = params.testCorpus.map(model.makeBOW(_))
+    var inferentialSampler = new InferentialGibbsSampler(params.cats.size,
+      params.alpha, params.beta, params.inferMcmcSteps, inferDocsTokens,
+      params.inferJoint)
+    val evaluator = new DualEvaluator(params.cats.size, params.cats,
+      labels, params.testLabels, inferentialSampler)
+
+    // If we fixed a random seed earlier and haven't reinitialized it
+    // yet, reinitialize it randomly now
+    if (params.fixInitialModel)
+      Stats.setDefaultSeed()
+
+    println("running particle filter...")
+    for (i <- initialBatchSize until corpus.length) {
+      println("DOCUMENT " + i + " / " + corpus.length)
+      model.ingestDoc(corpus(i), evaluator)
     }
+    model.evaluate(evaluator)
     model.writeTopics("results.txt")
-
-    val mis = Evaluation.nmi(model, labels, wrangle.DataConsts.SIM_3_LABELS)
-    println(mis.deep)
   }
 }

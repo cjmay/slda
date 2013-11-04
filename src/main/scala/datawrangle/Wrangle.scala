@@ -108,65 +108,41 @@ object DataConsts {
   val RESULTS_DIR = "results/"
   val DATA_DIR = "data/"
   val TNG_TRAIN_DIR = DATA_DIR + "20news-bydate-train/"
+  val TNG_TEST_DIR = DATA_DIR + "20news-bydate-test/"
   val TNG_WHITELIST = DATA_DIR + "TNG_WHITELIST"
   val TNG_STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
-  val ALT_ATHEISM = TNG_TRAIN_DIR + "alt.atheism"
-
-  val SIM_3_LABELS = List("comp.graphics", "comp.os.ms-windows.misc",
-                          "comp.windows.x")
-  val SIM_3_TRAIN_DOCS = List("comp.graphics", "comp.os.ms-windows.misc",
-                              "comp.windows.x") map (s => TNG_TRAIN_DIR + s)
-  val SIM_3_CATS = 3
-
-  val REL_3_LABELS = List("talk.politics.misc", "talk.politics.guns",
-                          "talk.politics.mideast")
-  val REL_3_TRAIN_DOCS = List("talk.politics.misc", "talk.politics.guns",
-                              "talk.politics.mideast") map (s =>
-                                TNG_TRAIN_DIR + s)
-  val REL_3_CATS = 3
-
-  val DIFF_3_LABELS = List("alt.atheism", "rec.sport.baseball",
-                           "sci.space")
-  val DIFF_3_TRAIN_DOCS = List("alt.atheism", "rec.sport.baseball",
-                               "sci.space") map (s => TNG_TRAIN_DIR + s)
-  val DIFF_3_CATS = 3
 }
 
 /** Wrangles the 20 Newsgroups dataset
  */
 object TNG {
-  // returns (corpus, stopwrds, # of categories)
-  def sim3 () = {
-    val c1 = Io.rawCorpus(wrangle.DataConsts.SIM_3_TRAIN_DOCS(0))
-    val l1 = Array.fill(c1.length){ wrangle.DataConsts.SIM_3_LABELS(0) }
-    val c2 = Io.rawCorpus(wrangle.DataConsts.SIM_3_TRAIN_DOCS(1))
-    val l2 = Array.fill(c2.length){ wrangle.DataConsts.SIM_3_LABELS(1) }
-    val c3 = Io.rawCorpus(wrangle.DataConsts.SIM_3_TRAIN_DOCS(2))
-    val l3 = Array.fill(c3.length){ wrangle.DataConsts.SIM_3_LABELS(2) }
-    (c1 ++ c2 ++ c3,
-     l1 ++ l2 ++ l3,
-     DataConsts.SIM_3_CATS)
+  private def loadCategories(categories: List[String]):
+  (Array[String], Array[String], Array[String], Array[String], List[String]) = {
+    val docCatPairs = categories.map({category =>
+      Io.rawCorpus(wrangle.DataConsts.TNG_TRAIN_DIR + category).map({doc =>
+        (doc, category)
+      })
+    }).toArray.flatten
+    val testDocCatPairs = categories.map({category =>
+      Io.rawCorpus(wrangle.DataConsts.TNG_TEST_DIR + category).map({doc =>
+        (doc, category)
+      })
+    }).toArray.flatten
+
+    (docCatPairs.map(p => p._1), docCatPairs.map(p => p._2),
+      testDocCatPairs.map(p => p._1), testDocCatPairs.map(p => p._2),
+      categories)
   }
 
-  /*
-  def main (args: Array[String]) {
-    val corpus = Io.rawCorpus(DataConsts.ALT_ATHEISM)
-    println("Docs in corpus " + corpus.length)
-    val sws = Text.stopWords(DataConsts.TNG_WHITELIST)
-    val (w, d) = Text.bow(corpus, (str: String) => sws(str))
-    val (wp, dp) = Text.bow(corpus, (str: String) => true)
-    println("Words in first doc " + corpus(0).length)
-    println("Vocabulary w filtering\t" + w.length)
-    println("Vocabulary wo filtering\t" + wp.length)
+  def sim3 =
+    loadCategories(
+      List("comp.graphics", "comp.os.ms-windows.misc", "comp.windows.x"))
 
-    val sim3 = Io.rawCorpus(DataConsts.SIM_3_TRAIN_DOCS)
-    val rel3 = Io.rawCorpus(DataConsts.REL_3_TRAIN_DOCS)
-    val diff3 = Io.rawCorpus(DataConsts.DIFF_3_TRAIN_DOCS)
-    println(sim3.length)
-    println(rel3.length)
-    println(diff3.length)
+  def rel3 =
+    loadCategories(
+      List("talk.politics.misc", "talk.politics.guns", "talk.politics.mideast"))
 
-    println(Io.files(DataConsts.TNG_TRAIN_DIR + "rec.sport.baseball").length)
-  }
-  */
+  def diff3 =
+    loadCategories(
+      List("alt.atheism", "rec.sport.baseball", "sci.space"))
 }

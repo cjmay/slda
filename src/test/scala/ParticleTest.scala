@@ -21,9 +21,10 @@ class ParticleTests extends FunSuite {
     val numParticles = 5
     val ess = 20
     val rejuvBatchSize = 256
+    val rejuvMcmcSteps = 256
     val rejuvSeq = new ReservoirSampler[Array[String]](numDocs)
     var ps = new ParticleStore (t, alpha, beta, numParticles, ess,
-                                rejuvBatchSize, rejuvSeq)
+                                rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
     ps
   }
 
@@ -206,6 +207,26 @@ class PfLdaTests extends FunSuite {
     pflda
   }
 
+  def tinyReservoirPfLda (): PfLda = {
+    // IMPORTANT NOTE: THESE SETTINGS RESULT IN VERY REASONABLE ASSIGNMENTS
+    // ON AVERAGE. THERE IS NO PRINCIPLED REASON TO HAVE CHOSEN THEM THIS
+    // WAY, EXCEPT TRIAL AND ERROR!
+    val topics = 2
+    val alpha = 0.1
+    val beta = 0.1
+    val sampleSize = 4
+    val numParticles = 5
+    val ess = 2
+    //val rejuvBatchSize = 256
+    val rejuvBatchSize = 100
+    //val rejuvMcmcSteps = 512
+    val rejuvMcmcSteps = 20
+    var pflda = new lda.PfLda(topics, alpha, beta, sampleSize,
+                              numParticles, ess, rejuvBatchSize,
+                              rejuvMcmcSteps)
+    pflda
+  }
+
   test("build test corpus") {
     //val corpus = generateCorpus()
     val corpus = generateSteyversGriffithsCorpus()
@@ -248,6 +269,28 @@ class PfLdaTests extends FunSuite {
     //pflda.printParticles
     //pflda.printTopics
     pflda.writeTopics("results.txt")
+
+    val mis = Evaluation.nmi(pflda, Array("nature", "nature", "nature",
+                                          "nature", "nature", "nature",
+                                          "nature", "nature", "finance",
+                                          "finance", "finance", "finance",
+                                          "finance", "finance", "finance",
+                                          "finance"),
+                             Array("nature", "finance"))
+    println(mis.deep)
+  }
+
+  test("build test corpus with tiny reservoir") {
+    val corpus = generateSteyversGriffithsCorpus()
+    val pflda = tinyReservoirPfLda()
+    // ingest documents, store a map of where they are in Reservoir Sampler
+    var map = new Array[Int](corpus.length)
+    for (i <- 0 to corpus.length-1) {
+      print(i + " ")
+      map(i) = pflda.ingestDoc(corpus(i)._2)
+    }
+
+    pflda.writeTopics("results_tiny-reservoir.txt")
 
     val mis = Evaluation.nmi(pflda, Array("nature", "nature", "nature",
                                           "nature", "nature", "nature",
