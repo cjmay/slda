@@ -38,11 +38,28 @@ class AggLogData(object):
             self.num_runs += 1
             self.in_sample_nmi = [[p] for p in log_data.in_sample_nmi]
 
-    def write(self, filename):
-        with open(filename, 'w') as f:
+        if self.out_of_sample_nmi:
+            if len(log_data.out_of_sample_nmi) == len(self.out_of_sample_nmi):
+                self.num_runs += 1
+                for i in range(len(log_data.out_of_sample_nmi)):
+                    self.out_of_sample_nmi[i].append(log_data.out_of_sample_nmi[i])
+            else:
+                sys.stderr.write('Wrong number of documents: %d != %d\n'
+                    % (len(log_data.out_of_sample_nmi), len(self.out_of_sample_nmi)))
+        else:
+            self.num_runs += 1
+            self.out_of_sample_nmi = [[p] for p in log_data.out_of_sample_nmi]
+
+    def write(self, in_sample_filename, out_of_sample_filename):
+        with open(in_sample_filename, 'w') as f:
             f.write('\t'.join('run.%d' % i for i in range(self.num_runs))
                 + '\n')
             for nmi in self.in_sample_nmi:
+                f.write('\t'.join(str(x) for x in nmi) + '\n')
+        with open(out_of_sample_filename, 'w') as f:
+            f.write('\t'.join('run.%d' % i for i in range(self.num_runs))
+                + '\n')
+            for nmi in self.out_of_sample_nmi:
                 f.write('\t'.join(str(x) for x in nmi) + '\n')
             
 
@@ -53,9 +70,6 @@ def process_logs(logs_location):
     for dataset_entry in os.listdir(logs_location):
         agg_log_data = AggLogData()
         dataset_path = os.path.join(logs_location, dataset_entry)
-        out_filename = dataset_path + '.tab'
-        if os.path.exists(out_filename):
-            raise Exception(out_filename + ' already exists')
         if not os.path.isdir(dataset_path):
             raise Exception(dataset_path + ' is not a directory')
         for run_entry in os.listdir(dataset_path):
@@ -67,7 +81,14 @@ def process_logs(logs_location):
                 if os.path.isfile(path) and entry.startswith(LOG_STEM):
                     d = parse_log(path)
                     agg_log_data.add(d)
-        agg_log_data.write(out_filename)
+        in_sample_out_filename = dataset_path + '_is.tab'
+        if os.path.exists(in_sample_out_filename):
+            raise Exception(in_sample_out_filename + ' already exists')
+        agg_log_data.write(in_sample_out_filename)
+        out_of_sample_out_filename = dataset_path + '_oos.tab'
+        if os.path.exists(out_of_sample_out_filename):
+            raise Exception(out_of_sample_out_filename + ' already exists')
+        agg_log_data.write(out_of_sample_out_filename)
 
 
 def parse_log(log_filename):
