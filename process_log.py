@@ -47,26 +47,27 @@ class AggLogData(object):
             
 
 
-def process_logs(logs_location, out_filename):
-    agg_log_data = AggLogData()
-
+def process_logs(logs_location):
     if not os.path.isdir(logs_location):
-        raise IllegalArgumentException(logs_location + ' is not a directory')
+        raise Exception(logs_location + ' is not a directory')
     for dataset_entry in os.listdir(logs_location):
+        agg_log_data = AggLogData()
         dataset_path = os.path.join(logs_location, dataset_entry)
+        out_filename = dataset_path + '.tab'
+        if os.path.exists(out_filename):
+            raise Exception(out_filename + ' already exists')
         if not os.path.isdir(dataset_path):
-            raise IllegalArgumentException(dataset_path + ' is not a directory')
+            raise Exception(dataset_path + ' is not a directory')
         for run_entry in os.listdir(dataset_path):
             run_path = os.path.join(dataset_path, run_entry)
             if not os.path.isdir(run_path):
-                raise IllegalArgumentException(run_path + ' is not a directory')
+                raise Exception(run_path + ' is not a directory')
             for entry in os.listdir(run_path):
                 path = os.path.join(run_path, entry)
                 if os.path.isfile(path) and entry.startswith(LOG_STEM):
                     d = parse_log(path)
                     agg_log_data.add(d)
-
-    agg_log_data.write(out_filename)
+        agg_log_data.write(out_filename)
 
 
 def parse_log(log_filename):
