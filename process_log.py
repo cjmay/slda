@@ -24,6 +24,7 @@ class AggLogData(object):
     def __init__(self):
         self.num_runs = 0
         self.in_sample_nmi = []
+        self.out_of_sample_nmi = []
 
     def add(self, log_data):
         if self.in_sample_nmi:
@@ -84,11 +85,10 @@ def process_logs(logs_location):
         in_sample_out_filename = dataset_path + '_is.tab'
         if os.path.exists(in_sample_out_filename):
             raise Exception(in_sample_out_filename + ' already exists')
-        agg_log_data.write(in_sample_out_filename)
         out_of_sample_out_filename = dataset_path + '_oos.tab'
         if os.path.exists(out_of_sample_out_filename):
             raise Exception(out_of_sample_out_filename + ' already exists')
-        agg_log_data.write(out_of_sample_out_filename)
+        agg_log_data.write(in_sample_out_filename, out_of_sample_out_filename)
 
 
 def parse_log(log_filename):
