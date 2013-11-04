@@ -753,6 +753,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     docLabels.toIterable
   }
 
+  // TODO DRY
   private def docLabel(docVect: DocumentUpdateVector): Int = {
     val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
     (0 until topics).reduce({(t1, t2) =>
@@ -760,6 +761,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     })
   }
 
+  // TODO DRY
   private def posterior(stats: CollapsedGibbsSufficientStats,
       currVocabSize: Int): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
@@ -768,6 +770,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
+  // TODO DRY
   private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
                            topic: Int, currVocabSize: Int): Double =
     (((stats.numTimesWordAssignedTopic(topic) + beta)
