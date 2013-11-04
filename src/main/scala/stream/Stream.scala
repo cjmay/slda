@@ -246,7 +246,8 @@ MappingStreamSampler[T] {
 class BootstrappedAssociativeStreamSampler[T: Manifest](
     inner: ImmutableAssociativeStreamSampler[T], k: Int)
     extends ImmutableAssociativeStreamSampler[T] {
-  var sampleIndices = new Array[Int](k)
+  val sampleIndices =
+    Stats.sampleWithReplacement((0 until inner.occupied).toArray, k)
 
   override def capacity: Int = k
 

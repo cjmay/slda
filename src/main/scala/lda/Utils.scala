@@ -16,11 +16,14 @@ object Stats {
     sampler = new Random(seed)
   }
 
-  def sampleWithoutReplacement [T:Manifest](a: Array[T], k: Int): Array[T] = {
+  def sampleWithoutReplacement[T:Manifest](a: Array[T], k: Int): Array[T] = {
     val sample = new ReservoirSampler[T](k)
     sample.addAll(a)
     sample.getSampleSet
   }
+
+  def sampleWithReplacement[T:Manifest](a: Array[T], k: Int): Array[T] =
+    (0 until k).map(i => a(sampler.nextInt(a.size))).toArray
 
   def shuffle[T](seq: Seq[T]): Seq[T] =
     sampler.shuffle(seq)
@@ -39,10 +42,10 @@ object Stats {
   
   /** Normalizes array of Double and makes it into a CDF; does this by
    side-effect, so it's good for low-mem situations */
-  def normalizeAndMakeCdf (arr: Array[Double]): Array[Double] = {
+  def normalizeAndMakeCdf(arr: Array[Double]): Array[Double] = {
     // WARNING SIDE EFFECTS ON `arr`
     @tailrec
-    def loop (i: Int, sum: Double, acc: Array[Double]): Array[Double] =
+    def loop(i: Int, sum: Double, acc: Array[Double]): Array[Double] =
       if (i >= acc.length) {
         acc(acc.length-1) = 1 // make sure last element is 1 and not eg 0.999
         acc
@@ -67,10 +70,10 @@ object Stats {
   
   /** Samples from simple categorical distribution; takes a normalized
    probability measure and returns a randomly-sampled index */
-  def sampleCategorical (cdf: Array[Double]): Int = {
+  def sampleCategorical(cdf: Array[Double]): Int = {
     val r = sampler.nextDouble()
     @tailrec
-    def loop (currIdx: Int): Int =
+    def loop(currIdx: Int): Int =
       if (cdf(currIdx-1) <= r && r < cdf(currIdx)) currIdx
       else loop(currIdx+1)
     (cdf.length, r < cdf(0)) match {
@@ -83,11 +86,11 @@ object Stats {
 }
 
 object Math {
-  def norm (vector: Array[Double], d: Int): Double = {
+  def norm(vector: Array[Double], d: Int): Double = {
     math.pow(vector.reduceLeft{ (acc,n) => math.pow(n,d) + acc }, 1.0/d)
   }
 
-  def max [T <% Ordered[T]](a: T, b: T): T = List(a, b).max
+  def max[T <% Ordered[T]](a: T, b: T): T = List(a, b).max
 
-  def min [T <% Ordered[T]](a: T, b: T): T = List(a, b).min
+  def min[T <% Ordered[T]](a: T, b: T): T = List(a, b).min
 }
