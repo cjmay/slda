@@ -3,6 +3,7 @@ package lda
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.HashSet
 
 import scala.math
 
@@ -127,7 +128,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
                  currVocabSize: Int, reservoirSize: Int,
-                 initPerParticle: Boolean): Unit = {
+                 initPerParticle: Boolean, initBootstrap: Boolean): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
     val (particlesPerformingInit, particlesNotPerformingInit) =
@@ -149,8 +150,21 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    for (p <- particlesPerformingInit)
-      p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    for (p <- particlesPerformingInit) {
+      if (initBootstrap) {
+        val bootstrap =
+          new BootstrappedAssociativeStreamSampler(rejuvSeq, rejuvSeq.occupied)
+        // TODO hacky (coupled)
+        val vocab: HashSet[String] = HashSet.empty
+        for (documentToken <- bootstrap.getSampleSet) {
+          val (docIdx, wordIdx, word) = documentToken
+          vocab += word
+        }
+        p.rejuvenate(bootstrap.getSampleIndices, mcmcSteps, vocab.size)
+      } else {
+        p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+      }
+    }
 
     println("* transitioning to particle filter")
 

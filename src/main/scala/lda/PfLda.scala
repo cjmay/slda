@@ -39,7 +39,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * Must be called before ingestDoc/ingestDocs.
     */
   def initialize(docs: Array[String], mcmcSteps: Int,
-      initPerParticle: Boolean): Unit = {
+      initPerParticle: Boolean, initBootstrap: Boolean): Unit = {
     val docsTokens = docs.map(makeBOW(_))
     vocab ++= docsTokens.flatten.toStream
 
@@ -50,7 +50,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
     particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
-      initPerParticle)
+      initPerParticle, initBootstrap)
   }
 
   /** Tokenize doc and remove stop words */

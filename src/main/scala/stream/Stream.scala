@@ -261,4 +261,6 @@ class BootstrappedAssociativeStreamSampler[T: Manifest](
 
   override def getSampleSet: Array[T] =
     (0 until k).map(apply(_)).toArray
+
+  def getSampleIndices: Array[Int] = sampleIndices
 }
