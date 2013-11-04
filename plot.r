@@ -17,7 +17,9 @@ plot.experiments <- function(experiment.group.name, experiment.names) {
                 data <- rbind(data, my.data)
             }
 
-            filename.out <- paste(experiment.group.name, '_', dataset.name, '_', eval.name, '.png', sep='')
+            dir.create('plots')
+            dir.create(paste('plots', experiment.group.name, sep='/'))
+            filename.out <- paste('plots', experiment.group.name, paste(dataset.name, '_', eval.name, '.png', sep=''), sep='/')
             qplot(idx, mean, data=data, group=experiment) + geom_smooth(aes(fill=experiment, ymin=lcl, ymax=ucl, color=experiment), data=data, stat="identity") + ylab('nmi (mean +/- one stdev)') + xlab('iteration (starting at end of initialization)') + ggtitle(paste(experiment.group.name, dataset.name, eval.name)) #+ ylim(0,1)
             ggsave(filename.out)
         }
