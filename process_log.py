@@ -41,14 +41,12 @@ class AggLogData(object):
 
         if self.out_of_sample_nmi:
             if len(log_data.out_of_sample_nmi) == len(self.out_of_sample_nmi):
-                self.num_runs += 1
                 for i in range(len(log_data.out_of_sample_nmi)):
                     self.out_of_sample_nmi[i].append(log_data.out_of_sample_nmi[i])
             else:
                 sys.stderr.write('Wrong number of documents: %d != %d\n'
                     % (len(log_data.out_of_sample_nmi), len(self.out_of_sample_nmi)))
         else:
-            self.num_runs += 1
             self.out_of_sample_nmi = [[p] for p in log_data.out_of_sample_nmi]
 
     def write(self, in_sample_filename, out_of_sample_filename):
