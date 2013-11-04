@@ -150,17 +150,21 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    for (p <- particlesPerformingInit) {
+    val bootstrapReservoirs: Array[BootstrapSampler[Particle.DocumentToken]] =
+      particlesPerformingInit.map(p =>
+        new BootstrapSampler(rejuvSeq, rejuvSeq.occupied))
+    val bootstrapVocabs: Array[HashSet[String]] =
+      particlesPerformingInit.map(p => new HashSet[String]())
+    for (i <- 0 until particlesPerformingInit.size) {
+      val p = particlesPerformingInit(i)
       if (initBootstrap) {
-        val bootstrap =
-          new BootstrappedAssociativeStreamSampler(rejuvSeq, rejuvSeq.occupied)
-        // TODO hacky (coupled)
-        val vocab: HashSet[String] = HashSet.empty
-        for (documentToken <- bootstrap.getSampleSet) {
+        val reservoir = bootstrapReservoirs(i)
+        val vocab = bootstrapVocabs(i)
+        for (documentToken <- reservoir.getSampleSet) {
           val (docIdx, wordIdx, word) = documentToken
-          vocab += word
+          vocab += word // TODO hacky (coupled)
         }
-        p.rejuvenate(bootstrap.getSampleIndices, mcmcSteps, vocab.size)
+        p.rejuvenate(reservoir.getSampleIndices, mcmcSteps, vocab.size)
       } else {
         p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
       }
@@ -170,11 +174,27 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
 
     // Set particle weights
     if (initPerParticle) {
-      weightParticlesByPosterior(currVocabSize)
+      if (initBootstrap) {
+        for (i <- 0 until particlesPerformingInit.size) {
+          val p = particlesPerformingInit(i)
+          p.weight =
+            p.logPosterior(bootstrapReservoirs(i), bootstrapVocabs(i).size)
+        }
+      } else {
+        for (p <- particlesPerformingInit)
+          p.weight = p.logPosterior(rejuvSeq, currVocabSize)
+      }
+      val maxLogPosterior = particlesPerformingInit.map(_.weight).max
+      for (p <- particlesPerformingInit)
+        p.weight = math.exp(p.weight - maxLogPosterior)
     } else {
-      for (p <- particlesPerformingInit) p.weight = 1
-      for (p <- particlesNotPerformingInit) p.weight = 0
+      for (p <- particlesPerformingInit)
+        p.weight = 1
     }
+    for (p <- particlesNotPerformingInit)
+      p.weight = 0
+    for (i <- 0 until particles.size)
+      println("  - particle " + i + " weight " + particles(i).weight)
 
     // Reset reservoir to non-trivial size
     rejuvSeq.reset(reservoirSize)
@@ -223,12 +243,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     // whose distribution is consistent with particle filter...
     resampleAndRejuvenate((0 until rejuvSeq.occupied).toArray,
       currVocabSize)
-  }
-
-  def weightParticlesByPosterior(currVocabSize: Int): Unit = {
-    for (p <- particles) p.weight = p.logPosterior(currVocabSize) // (negative)
-    val maxLogPosterior = particles.map(_.weight).max
-    for (p <- particles) p.weight = math.exp(p.weight - maxLogPosterior)
   }
 
   /** Helper method puts the weights of particles into an array, so that
@@ -494,9 +508,11 @@ class Particle(val topics: Int, val initialWeight: Double,
     * reservoir
     * TODO: is this implementation correct?
     */
-  def logPosterior(currVocabSize: Int): Double =
-    (0 until rejuvSeq.occupied).map({tokenIdx =>
-      val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
+  def logPosterior(
+      reservoir: ImmutableAssociativeStreamSampler[Particle.DocumentToken],
+      currVocabSize: Int): Double =
+    (0 until reservoir.occupied).map({tokenIdx =>
+      val (docIdx, wordIdx, word) = reservoir(tokenIdx)
       val topic = assgStore.getTopic(particleId, docIdx, wordIdx)
       val docVect = rejuvSeqDocVects(tokenIdx)
       val numer = posteriorEqn(

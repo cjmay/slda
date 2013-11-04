@@ -243,7 +243,7 @@ MappingStreamSampler[T] {
 /** Immutable view of an associative stream sampler comprising k
   * samples, with replacement, from that sampler
   */
-class BootstrappedAssociativeStreamSampler[T: Manifest](
+class BootstrapSampler[T: Manifest](
     inner: ImmutableAssociativeStreamSampler[T], k: Int)
     extends ImmutableAssociativeStreamSampler[T] {
   val sampleIndices =
