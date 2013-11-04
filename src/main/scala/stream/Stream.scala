@@ -116,10 +116,10 @@ AssociativeStreamSampler[T] {
   }
 
   /** Capacity of sampler, ie, maximum number of slots available total */
-  def capacity() = k
+  def capacity: Int = k
 
   /** Number of elemtents in reservoir */
-  def occupied() =
+  def occupied: Int =
     if (currIdx >= k) k
     else currIdx
 
