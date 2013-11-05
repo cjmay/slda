@@ -191,10 +191,6 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     particles = (0 until numParticles).toArray.map({
       i => p.copy(newParticleId())
     })
-
-    // Rejuvenate to create particle diversity...
-    val newTokenIds = (0 until rejuvSeq.occupied).toArray
-    rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
     uniformReweightAll()
   }
 
