@@ -38,8 +38,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   /** Initialize model with batch MCMC.
     * Must be called before ingestDoc/ingestDocs.
     */
-  def initialize(docs: Array[String], mcmcSteps: Int,
-      initPerParticle: Boolean, initBootstrap: Boolean): Unit = {
+  def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
     val docsTokens = docs.map(makeBOW(_))
     vocab ++= docsTokens.flatten.toStream
 
@@ -49,8 +48,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     particles = new ParticleStore(T, alpha, beta, numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
-    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize,
-      initPerParticle, initBootstrap)
+    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize)
   }
 
   /** Tokenize doc and remove stop words */

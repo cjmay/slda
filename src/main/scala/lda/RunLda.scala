@@ -23,8 +23,6 @@ abstract class RunLdaParams {
   val fixInitialModel: Boolean = false
   val inferMcmcSteps: Int = 5
   val inferJoint: Boolean = false
-  val initPerParticle: Boolean = false
-  val initBootstrap: Boolean = false
 }
 
 object Sim3PfParams extends RunLdaParams {
@@ -78,8 +76,7 @@ object RunLda {
     val initialBatchSize = Math.min(params.initialBatchSize, corpus.length)
     model.initialize(
       (0 until initialBatchSize).map(corpus(_)).toArray,
-      params.initialBatchMcmcSteps, params.initPerParticle,
-      params.initBootstrap)
+      params.initialBatchMcmcSteps)
 
     val inferDocsTokens = params.testCorpus.map(model.makeBOW(_))
     var inferentialSampler = new InferentialGibbsSampler(params.cats.size,

@@ -3,9 +3,6 @@ package lda
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
-import scala.collection.mutable.HashSet
-
-import scala.math
 
 import globals.Constants
 import stream._
@@ -127,15 +124,10 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * update data structures to prepare for particle filtering.
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
-                 currVocabSize: Int, reservoirSize: Int,
-                 initPerParticle: Boolean, initBootstrap: Boolean): Unit = {
+                 currVocabSize: Int, reservoirSize: Int): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
-    val (particlesPerformingInit, particlesNotPerformingInit) =
-      if (initPerParticle)
-        (particles, Array[Particle]())
-      else
-        (particles.take(1), particles.slice(1, particles.size))
+    val p = particles(0)
 
     // Add initial tokens to reservoir
     val allTokenIds = (0 until docs.size).map({docIdx =>
@@ -144,57 +136,14 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
         rejuvSeq.addItem(
           new Particle.DocumentToken(docIdx, wordIdx, doc(wordIdx)))._1
       }).toArray
-      for (p <- particlesPerformingInit)
-        p.newDocumentUpdateInitial(docIdx, tokenIds, doc)
+      p.newDocumentUpdateInitial(docIdx, tokenIds, doc)
       tokenIds
     }).toArray
 
     // Do initial batch iterations
-    val bootstrapReservoirs: Array[BootstrapSampler[Particle.DocumentToken]] =
-      particlesPerformingInit.map(p =>
-        new BootstrapSampler(rejuvSeq, rejuvSeq.occupied))
-    val bootstrapVocabs: Array[HashSet[String]] =
-      particlesPerformingInit.map(p => new HashSet[String]())
-    for (i <- 0 until particlesPerformingInit.size) {
-      val p = particlesPerformingInit(i)
-      if (initBootstrap) {
-        val reservoir = bootstrapReservoirs(i)
-        val vocab = bootstrapVocabs(i)
-        for (documentToken <- reservoir.getSampleSet) {
-          val (docIdx, wordIdx, word) = documentToken
-          vocab += word // TODO hacky (coupled)
-        }
-        p.rejuvenate(reservoir.getSampleIndices, mcmcSteps, vocab.size)
-      } else {
-        p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
-      }
-    }
+    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
 
     println("* transitioning to particle filter")
-
-    // Set particle weights
-    if (initPerParticle) {
-      if (initBootstrap) {
-        for (i <- 0 until particlesPerformingInit.size) {
-          val p = particlesPerformingInit(i)
-          p.weight =
-            p.logPosterior(bootstrapReservoirs(i), bootstrapVocabs(i).size)
-        }
-      } else {
-        for (p <- particlesPerformingInit)
-          p.weight = p.logPosterior(rejuvSeq, currVocabSize)
-      }
-      val maxLogPosterior = particlesPerformingInit.map(_.weight).max
-      for (p <- particlesPerformingInit)
-        p.weight = math.exp(p.weight - maxLogPosterior)
-    } else {
-      for (p <- particlesPerformingInit)
-        p.weight = 1
-    }
-    for (p <- particlesNotPerformingInit)
-      p.weight = 0
-    for (i <- 0 until particles.size)
-      println("  - particle " + i + " weight " + particles(i).weight)
 
     // Reset reservoir to non-trivial size
     rejuvSeq.reset(reservoirSize)
@@ -231,18 +180,22 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     currDocIdx += docs.size // currDocIdx == -1 before this update
 
     // Inform particle 0 of new reservoir
-    for (p <- particlesPerformingInit)
-      p.remapRejuvSeq(newToOldRejuvSeqMap)
+    p.remapRejuvSeq(newToOldRejuvSeqMap)
 
     // Remove elements from assignment store that were removed from
     // reservoir
     for ((docIdx, wordIdx, word) <- removedTokens)
       assgStore.removeAll(docIdx, wordIdx)
 
-    // Resample and rejuvenate so we have a diverse set of particles
-    // whose distribution is consistent with particle filter...
-    resampleAndRejuvenate((0 until rejuvSeq.occupied).toArray,
-      currVocabSize)
+    // Clone particle 0 to create new particle set
+    particles = (0 until numParticles).toArray.map({
+      i => p.copy(newParticleId())
+    })
+
+    // Rejuvenate to create particle diversity...
+    val newTokenIds = (0 until rejuvSeq.occupied).toArray
+    rejuvenateAll(newTokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
+    uniformReweightAll()
   }
 
   /** Helper method puts the weights of particles into an array, so that
@@ -503,28 +456,6 @@ class Particle(val topics: Int, val initialWeight: Double,
   var currDocVect = new DocumentUpdateVector(topics)
   var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
   var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty
-
-  /** Return natural log of posterior probability for all data in
-    * reservoir
-    * TODO: is this implementation correct?
-    */
-  def logPosterior(
-      reservoir: ImmutableAssociativeStreamSampler[Particle.DocumentToken],
-      currVocabSize: Int): Double =
-    (0 until reservoir.occupied).map({tokenIdx =>
-      val (docIdx, wordIdx, word) = reservoir(tokenIdx)
-      val topic = assgStore.getTopic(particleId, docIdx, wordIdx)
-      val docVect = rejuvSeqDocVects(tokenIdx)
-      val numer = posteriorEqn(
-        new IncrementalStats(globalVect, docVect, topic, word),
-        topic, currVocabSize)
-      val denom = (0 until topics).map(t =>
-        posteriorEqn(
-          new IncrementalStats(globalVect, docVect, topic, word),
-          t, currVocabSize)
-      ).sum
-      math.log(numer) - math.log(denom)
-    }).sum
 
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new

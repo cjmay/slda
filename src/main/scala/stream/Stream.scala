@@ -239,28 +239,3 @@ MappingStreamSampler[T] {
   override def capacity: Int = k
   override def occupied: Int = sample.size
 }
-
-/** Immutable view of an associative stream sampler comprising k
-  * samples, with replacement, from that sampler
-  */
-class BootstrapSampler[T: Manifest](
-    inner: ImmutableAssociativeStreamSampler[T], k: Int)
-    extends ImmutableAssociativeStreamSampler[T] {
-  val sampleIndices =
-    Stats.sampleWithReplacement((0 until inner.occupied).toArray, k)
-
-  override def capacity: Int = k
-
-  override def occupied: Int = k
-
-  override def apply(i: Int): T =
-    if (i >= k)
-      throw new RuntimeException("bootstrapped sample has seen <= " + i +
-                                 " objects!")
-    else inner(sampleIndices(i))
-
-  override def getSampleSet: Array[T] =
-    (0 until k).map(apply(_)).toArray
-
-  def getSampleIndices: Array[Int] = sampleIndices
-}
