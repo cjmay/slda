@@ -64,6 +64,7 @@ class AggLogData(object):
 
 
 def process_logs(logs_location):
+    print(logs_location)
     if not os.path.isdir(logs_location):
         raise Exception(logs_location + ' is not a directory')
     for dataset_entry in os.listdir(logs_location):

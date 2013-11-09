@@ -1,16 +1,18 @@
 library(ggplot2)
 
 plot.experiments <- function(experiment.group.name, experiment.names) {
+    cat(experiment.group.name, '\n')
     for (dataset.name in c('diff3', 'rel3', 'sim3')) {
+        cat('*', dataset.name, '\n')
         for (eval.name in c('oos', 'is')) {
             data <- data.frame()
             for (experiment.name in experiment.names) {
+                cat('  -', experiment.name, eval.name, '\n')
                 filename.in <- paste(experiment.name, '/', dataset.name, '_', eval.name, '.tab', sep='')
                 my.data.raw <- read.table(filename.in, header=T)
                 my.data <- data.frame(mean=rowSums(my.data.raw)/dim(my.data.raw)[2])
                 my.data$experiment <- rep(experiment.name, dim(my.data)[1])
-                my.data$sd <- rep(0, dim(my.data)[1])
-                for (i in 1:dim(my.data)[1]) { my.data$sd[[i]] <- sd(my.data.raw[i,]) }
+                my.data$sd <- apply(my.data.raw, 1, sd)
                 my.data$idx <- 1:dim(my.data)[1]
                 my.data$lcl <- my.data$mean - my.data$sd
                 my.data$ucl <- my.data$mean + my.data$sd
