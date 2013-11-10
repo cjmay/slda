@@ -27,39 +27,30 @@ class AggLogData(object):
         self.out_of_sample_nmi = []
 
     def add(self, log_data):
-        if self.in_sample_nmi:
-            if len(log_data.in_sample_nmi) == len(self.in_sample_nmi):
-                self.num_runs += 1
-                for i in range(len(log_data.in_sample_nmi)):
-                    self.in_sample_nmi[i].append(log_data.in_sample_nmi[i])
+        for attr_name in ('in_sample_nmi', 'out_of_sample_nmi'):
+            log_nmi_array = getattr(log_data, attr_name)
+            nmi_array = getattr(self, attr_name)
+            if len(log_nmi_array) == len(nmi_array):
+                if attr_name == 'in_sample_nmi': # don't over-count
+                    self.num_runs += 1
+                for i in range(len(log_nmi_array)):
+                    nmi_array[i].append(log_nmi_array[i])
+            elif len(nmi_array) == 0:
+                if attr_name == 'in_sample_nmi': # don't over-count
+                    self.num_runs += 1
+                for p in log_nmi_array:
+                    nmi_array.append([p])
             else:
                 sys.stderr.write('Wrong number of documents: %d != %d\n'
-                    % (len(log_data.in_sample_nmi), len(self.in_sample_nmi)))
-        else:
-            self.num_runs += 1
-            self.in_sample_nmi = [[p] for p in log_data.in_sample_nmi]
-
-        if self.out_of_sample_nmi:
-            if len(log_data.out_of_sample_nmi) == len(self.out_of_sample_nmi):
-                for i in range(len(log_data.out_of_sample_nmi)):
-                    self.out_of_sample_nmi[i].append(log_data.out_of_sample_nmi[i])
-            else:
-                sys.stderr.write('Wrong number of documents: %d != %d\n'
-                    % (len(log_data.out_of_sample_nmi), len(self.out_of_sample_nmi)))
-        else:
-            self.out_of_sample_nmi = [[p] for p in log_data.out_of_sample_nmi]
+                    % (len(log_nmi_array), len(nmi_array)))
 
     def write(self, in_sample_filename, out_of_sample_filename):
-        with open(in_sample_filename, 'w') as f:
-            f.write('\t'.join('run.%d' % i for i in range(self.num_runs))
-                + '\n')
-            for nmi in self.in_sample_nmi:
-                f.write('\t'.join(str(x) for x in nmi) + '\n')
-        with open(out_of_sample_filename, 'w') as f:
-            f.write('\t'.join('run.%d' % i for i in range(self.num_runs))
-                + '\n')
-            for nmi in self.out_of_sample_nmi:
-                f.write('\t'.join(str(x) for x in nmi) + '\n')
+        for (filename, nmi_array) in ((in_sample_filename, self.in_sample_nmi),
+                                      (out_of_sample_filename, self.out_of_sample_nmi)):
+            with open(filename, 'w') as f:
+                f.write('\t'.join('run.%d' % i for i in range(self.num_runs)) + '\n')
+                for nmi in nmi_array:
+                    f.write('\t'.join(str(x) for x in nmi) + '\n')
             
 
 
