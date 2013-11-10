@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [ $# -ne 2 ]
+then
+    echo 'Specify the experiment dir and tab output dir.' >&2
+    exit 1
+fi
+
 experiment_dir="$1"
 output_dir="$2"
 

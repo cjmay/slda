@@ -2,6 +2,12 @@
 
 set -e
 
+if [ $# -ne 1 ]
+then
+    echo 'Specify the repo grandparent dir.' >&2
+    exit 1
+fi
+
 params_name_stem=PfParams
 params_rel_path=src/main/scala/lda/RunLda.scala
 

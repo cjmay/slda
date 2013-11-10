@@ -2,6 +2,12 @@
 
 set -e
 
+if [ $# -ne 1 ]
+then
+    echo 'Specify the repo dir.' >&2
+    exit 1
+fi
+
 repo_path="$1"
 log_stem="slda.o"
 
