@@ -40,3 +40,4 @@ plot.experiments('12', c('12-rs100', '12-rs1k', '12-rs10k', '12-rs100k', '12-rs2
 plot.experiments('15', c('15-rs100', '15-rs1k', '15-rs10k', '15-rs100k', '15-rs200k'))
 plot.experiments('16', c('16-rs100', '16-rs1k', '16-rs10k', '16-rs100k', '16-rs200k'))
 plot.experiments('17', c('17-rs100', '17-rs1k', '17-rs10k', '17-rs100k', '17-rs200k'))
+plot.experiments('17_18_19', c('17-rs10k', '18-rs10k', '19-rs10k'))
