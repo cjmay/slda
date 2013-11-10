@@ -63,13 +63,13 @@ class AggLogData(object):
             
 
 
-def process_logs(logs_location):
-    print(logs_location)
-    if not os.path.isdir(logs_location):
-        raise Exception(logs_location + ' is not a directory')
-    for dataset_entry in os.listdir(logs_location):
+def process_logs(experiment_path):
+    print(experiment_path)
+    if not os.path.isdir(experiment_path):
+        raise Exception(experiment_path + ' is not a directory')
+    for dataset_entry in os.listdir(experiment_path):
         agg_log_data = AggLogData()
-        dataset_path = os.path.join(logs_location, dataset_entry)
+        dataset_path = os.path.join(experiment_path, dataset_entry)
         if not os.path.isdir(dataset_path):
             raise Exception(dataset_path + ' is not a directory')
         for run_entry in os.listdir(dataset_path):
