@@ -11,8 +11,8 @@ plot.experiments <- function(experiment.group.name, experiment.names, experiment
         for (eval.name in c('oos', 'is')) {
             data <- data.frame()
             for (i in 1:length(experiment.names)) {
-                experiment.name <- experiment.names(i)
-                experiment.name.legend <- experiment.names.legend(i)
+                experiment.name <- experiment.names[i]
+                experiment.name.legend <- experiment.names.legend[i]
                 cat('  -', experiment.name, eval.name, '\n')
                 filename.in <- paste(experiment.name, '/', dataset.name, '_', eval.name, '.tab', sep='')
                 my.data.raw <- read.table(filename.in, header=T)
