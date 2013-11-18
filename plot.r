@@ -33,15 +33,15 @@ plot.experiments <- function(experiment.group.name, experiment.names, experiment
             dir.create('plots')
             dir.create(paste('plots', experiment.group.name, sep='/'))
             filename.out <- paste('plots', experiment.group.name, paste(dataset.name, '_', eval.name, '.png', sep=''), sep='/')
-            qplot(idx, mean, data=data, group=experiment) + geom_smooth(aes(fill=experiment, ymin=lcl, ymax=ucl, color=experiment), data=data, stat="identity") + ylab('nmi (mean +/- stdev)') + xlab('document number (starting at end of initialization)') + ggtitle(paste(dataset.name, eval.name)) #+ ylim(0,1)
+            qplot(idx, mean, data=data, group=experiment) + geom_smooth(aes(fill=experiment, ymin=lcl, ymax=ucl, color=experiment), data=data, stat="identity") + ylab('nmi (mean +/- stdev)') + xlab('document number (starting at end of initialization)') + ggtitle(paste(dataset.name, eval.title.name)) #+ ylim(0,1)
             ggsave(filename.out)
         }
     }
 }
 
 plot.experiments('1', c('1-rs0', '1-rs1k', '1-rs10k', '1-rs100k'), c('reservoir size 0', 'reservoir size 1k', 'reservoir size 10k', 'reservoir size 100k'))
-plot.experiments('2', c('2-rs1k-ibs0', '2-rs1k-ibs10', '2-rs1k-ibs100', '2-rs1k-ibs1k'), NULL)
-plot.experiments('9', c('9-rs0', '9-rs1k', '9-rs10k', '9-rs100k'), NULL)
+plot.experiments('2', c('2-rs1k-ibs0', '2-rs1k-ibs10', '2-rs1k-ibs100', '2-rs1k-ibs1k'), c('initialization size 0', 'initialization size 10', 'initialization size 100', 'initialization size 1k'))
+plot.experiments('9', c('9-rs0', '9-rs1k', '9-rs10k', '9-rs100k'), c('reservoir size 0', 'reservoir size 1k', 'reservoir size 10k', 'reservoir size 100k'))
 plot.experiments('3-ibs10', c('3-rs0-ibs10', '3-rs1k-ibs10', '3-rs10k-ibs10', '3-rs100k-ibs10'), NULL)
 plot.experiments('3-ibs100', c('3-rs0-ibs100', '3-rs1k-ibs100', '3-rs10k-ibs100', '3-rs100k-ibs100'), NULL)
 plot.experiments('3-ibs1k', c('3-rs0-ibs1k', '3-rs1k-ibs1k', '3-rs10k-ibs1k', '3-rs100k-ibs1k'), NULL)
