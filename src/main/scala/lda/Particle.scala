@@ -82,8 +82,15 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   }
 
   /** Resample particles proportional to their probability */
-  def resample(unnormalizedWeights: Array[Double]): Unit =
+  def resample(unnormalizedWeights: Array[Double]): Unit = {
+    val total = unnormalizedWeights.sum
+    System.err.println("WEIGHTS " + unnormalizedWeights.map((w: Double) =>
+      (w / total).toString
+    ).reduceLeft((x: String, y: String) =>
+      x + " " + y
+    ))
     particles = multinomialResample(unnormalizedWeights)
+  }
 
   /** Return whether inverse 2-norm of particle weights is within ESS */
   def shouldResample: Boolean = {
