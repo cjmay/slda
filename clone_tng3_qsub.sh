@@ -12,7 +12,6 @@ params_name_stem=PfParams
 params_rel_path=src/main/scala/lda/RunLda.scala
 
 new_repo_grandparent_dir="$1"
-shift
 
 for params_name_prefix in Diff3 Rel3 Sim3
 do
@@ -21,9 +20,7 @@ do
     echo "$new_repo_path"
     sed -i '/^[[:space:]]*val params: RunLdaParams =.*$/s/=.*$/'"= ${params_name_prefix}${params_name_stem}/" "$new_repo_path/$params_rel_path"
     pushd "$new_repo_path" >/dev/null
-    if [ $# -gt 0 ]
-    then
-        "$@"
-    fi
+    sbt package
+    qsub -q text.q coe-qsub-job
     popd >/dev/null
 done
