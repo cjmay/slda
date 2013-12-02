@@ -2,6 +2,7 @@
 #$ -cwd
 #$ -j y
 #$ -t 30
+#$ -tc 10
 #$ -V
 #$ -l num_proc=1,mem_free=12G,h_rt=24:00:00
 #$ -N "slda"
