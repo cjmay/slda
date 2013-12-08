@@ -72,6 +72,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
       println("NUMWORDS " + words.length)
     }
+    println("VOCAB " + vocab.size)
 
     println
 
