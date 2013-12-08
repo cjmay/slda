@@ -6,6 +6,10 @@ package wrangle
 import scala.io.Source
 import scala.annotation.tailrec
 import java.io.File
+import lda.Stats
+
+import edu.jhu.agiga.AgigaPrefs
+import edu.jhu.agiga.StreamingDocumentReader
 
 
 /** Handles basic IO for our little package */
@@ -145,4 +149,15 @@ object TNG {
   def diff3 =
     loadCategories(
       List("alt.atheism", "rec.sport.baseball", "sci.space"))
+}
+
+class Gigaword {
+	val prefs = makePrefs
+
+	private def makePrefs: AgigaPrefs = {
+		val p = new AgigaPrefs()
+		p.setAll(false)
+		p.setWord(true)
+		p
+	}
 }

@@ -23,6 +23,7 @@ abstract class RunLdaParams {
   val fixInitialModel: Boolean = false
   val inferMcmcSteps: Int = 5
   val inferJoint: Boolean = false
+	val gigawordDir: String = "/export/common/data/corpora/LDC/LDC2012T21/data/xml/"
 }
 
 object Sim3PfParams extends RunLdaParams {
