@@ -5,6 +5,7 @@ package evaluation
 
 import java.io.{ PrintWriter, File }
 import scala.math
+import scala.collection.mutable.HashSet
 
 import lda._
 
@@ -79,13 +80,13 @@ class DualEvaluator(topics: Int,
       numCats, cats))
   }
 
-  def outOfSampleEval(globalVect: GlobalUpdateVector, currVocabSize: Int):
+  def outOfSampleEval(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
   Unit = {
-    val labels = inferentialSampler.infer(globalVect, currVocabSize)
+    val labels = inferentialSampler.infer(globalVect, vocab.size)
     println(Evaluation.nmi(
       labels, outOfSampleLabels.take(labels.size),
       numCats, cats))
-    val perplexity = inferentialSampler.perplexity(globalVect)
+    val perplexity = inferentialSampler.perplexity(globalVect, vocab)
     println("OUT-OF-SAMPLE PERPLEXITY " + perplexity)
   }
 }

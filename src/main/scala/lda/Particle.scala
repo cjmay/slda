@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 import scala.math
+import scala.collection.mutable.HashSet
 
 import globals.Constants
 import stream._
@@ -675,32 +676,36 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Array.fill(doc.size)(0)
   })
 
-  def logLikelihood(globalVect: GlobalUpdateVector): Double = {
+  def logLikelihood(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
+  Double = {
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
     for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
       for (wordIdx <- 0 until doc.size) {
-        val denom = alpha * topics + z.sum
         val word = doc(wordIdx)
-        for (topic <- 0 until topics) {
-          val b = globalVect.proportionWordAssignedTopic(word, topic)
-          w(topic) = b * (alpha + z(topic)) / denom
-        }
-        val s = w.sum
-        ll += math.log(s)
-        for (topic <- 0 until topics) {
-          w(topic) /= s
-          z(topic) += w(topic)
+        if (vocab.contains(word)) {
+          val denom = alpha * topics + z.sum
+          for (topic <- 0 until topics) {
+            val b = globalVect.proportionWordAssignedTopic(word, topic)
+            w(topic) = b * (alpha + z(topic)) / denom
+          }
+          val s = w.sum
+          ll += math.log(s)
+          for (topic <- 0 until topics) {
+            w(topic) /= s
+            z(topic) += w(topic)
+          }
         }
       }
     }
     ll
   }
 
-  def perplexity(globalVect: GlobalUpdateVector): Double =
-    math.exp(-logLikelihood(globalVect) / docs.map(_.size).sum)
+  def perplexity(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
+  Double =
+    math.exp(-logLikelihood(globalVect, vocab) / docs.map(_.size).sum)
 
   def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int):
   Iterable[Int] = {
