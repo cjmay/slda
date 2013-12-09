@@ -3,6 +3,7 @@ package lda
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
+import scala.math
 
 import globals.Constants
 import stream._
@@ -84,7 +85,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   /** Resample particles proportional to their probability */
   def resample(unnormalizedWeights: Array[Double]): Unit = {
     val total = unnormalizedWeights.sum
-    System.err.println("WEIGHTS " + unnormalizedWeights.map((w: Double) =>
+    println("WEIGHTS " + unnormalizedWeights.map((w: Double) =>
       (w / total).toString
     ).reduceLeft((x: String, y: String) =>
       x + " " + y
@@ -674,6 +675,33 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Array.fill(doc.size)(0)
   })
 
+  def logLikelihood(globalVect: GlobalUpdateVector): Double = {
+    val w = Array.fill(topics)(0.0)
+    val z = Array.fill(topics)(0.0)
+    var ll = 0.0
+    for (docIdx <- 0 until docs.size) {
+      val doc = docs(docIdx)
+      for (wordIdx <- 0 until doc.size) {
+        val denom = alpha * topics + z.sum
+        val word = doc(wordIdx)
+        for (topic <- 0 until topics) {
+          val b = globalVect.proportionWordAssignedTopic(word, topic)
+          w(topic) = b * (alpha + z(topic)) / denom
+        }
+        val s = w.sum
+        ll += math.log(s)
+        for (topic <- 0 until topics) {
+          w(topic) /= s
+          z(topic) += w(topic)
+        }
+      }
+    }
+    ll
+  }
+
+  def perplexity(globalVect: GlobalUpdateVector): Double =
+    math.exp(-logLikelihood(globalVect) / docs.map(_.size).sum)
+
   def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int):
   Iterable[Int] = {
     val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
@@ -793,6 +821,10 @@ class GlobalUpdateVector(val topics: Int) {
 
   def numTimesTopicAssignedTotal(topic: Int): Int =
     timesTopicAssignedTotal(topic)
+
+  def proportionWordAssignedTopic(word: String, topic: Int): Double =
+    (numTimesWordAssignedTopic(word, topic).toDouble
+      / numTimesTopicAssignedTotal(topic).toDouble)
 
   /** Updates vector based on observation: word and topic assigned to it */
   def update(word: String, topic: Int): Unit = {
