@@ -106,6 +106,8 @@ object RunLda {
     }
 
     println("training size " + corpus.map(_.size).sum)
+    println("training num OOV "
+      + corpus.map(d => d.filter(_ == OOV).size).sum)
 
     val inferDocsTokens =
       params.testCorpus.map(makeBOW(_).map(substituteOOV(_, vocab)))
@@ -117,6 +119,8 @@ object RunLda {
       labels, params.initialBatchSize, params.testLabels, inferentialSampler)
 
     println("testing size " + inferDocsTokens.map(_.size).sum)
+    println("testing num OOV "
+      + inferDocsTokens.map(d => d.filter(_ == OOV).size).sum)
 
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
