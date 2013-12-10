@@ -105,6 +105,19 @@ object RunLda {
       }
     }
 
+    println("training size " + corpus.map(_.size).sum)
+
+    val inferDocsTokens =
+      params.testCorpus.map(makeBOW(_).map(substituteOOV(_, vocab)))
+    var inferentialSampler = new InferentialGibbsSampler(params.cats.size,
+      params.alpha, params.beta, vocab.size,
+      params.inferMcmcSteps, inferDocsTokens,
+      params.inferJoint)
+    val evaluator = new DualEvaluator(params.cats.size, params.cats,
+      labels, params.initialBatchSize, params.testLabels, inferentialSampler)
+
+    println("testing size " + inferDocsTokens.map(_.size).sum)
+
     println("initializing model...")
     val model = new PfLda(params.cats.size, params.alpha, params.beta,
                           vocab,
@@ -116,15 +129,6 @@ object RunLda {
     model.initialize(
       corpus.take(initialBatchSize),
       params.initialBatchMcmcSteps)
-
-    val inferDocsTokens =
-      params.testCorpus.map(makeBOW(_).map(substituteOOV(_, vocab)))
-    var inferentialSampler = new InferentialGibbsSampler(params.cats.size,
-      params.alpha, params.beta, vocab.size,
-      params.inferMcmcSteps, inferDocsTokens,
-      params.inferJoint)
-    val evaluator = new DualEvaluator(params.cats.size, params.cats,
-      labels, params.initialBatchSize, params.testLabels, inferentialSampler)
 
     // If we fixed a random seed earlier and haven't reinitialized it
     // yet, reinitialize it randomly now
