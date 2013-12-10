@@ -17,7 +17,9 @@ params_rel_path=src/main/scala/lda/RunLda.scala
 
 new_repo_parent_dir="$1"
 
-for params_name_prefix in Diff3 Rel3 Sim3
+# TODO do minimal experiments for now
+#for params_name_prefix in Diff3 Rel3 Sim3
+for params_name_prefix in Diff3
 do
     new_repo_path="$new_repo_parent_dir/"`echo "$params_name_prefix" | tr A-Z a-z`
     bash clone.sh "$new_repo_path"
