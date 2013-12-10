@@ -80,13 +80,13 @@ class DualEvaluator(topics: Int,
       numCats, cats))
   }
 
-  def outOfSampleEval(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
+  def outOfSampleEval(globalVect: GlobalUpdateVector):
   Unit = {
-    val labels = inferentialSampler.infer(globalVect, vocab.size)
+    val labels = inferentialSampler.infer(globalVect)
     println(Evaluation.nmi(
       labels, outOfSampleLabels.take(labels.size),
       numCats, cats))
-    val perplexity = inferentialSampler.perplexity(globalVect, vocab)
+    val perplexity = inferentialSampler.perplexity(globalVect)
     println("OUT-OF-SAMPLE PERPLEXITY " + perplexity)
   }
 }
