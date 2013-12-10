@@ -86,7 +86,8 @@ class DualEvaluator(topics: Int,
     println(Evaluation.nmi(
       labels, outOfSampleLabels.take(labels.size),
       numCats, cats))
-    val perplexity = inferentialSampler.perplexity(globalVect)
+    val (perplexity, ll) = inferentialSampler.perplexity(globalVect)
     println("OUT-OF-SAMPLE PERPLEXITY " + perplexity)
+    println("OUT-OF-SAMPLE LOG-LIKELIHOOD " + ll)
   }
 }

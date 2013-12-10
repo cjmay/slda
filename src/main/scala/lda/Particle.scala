@@ -674,7 +674,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Array.fill(doc.size)(0)
   })
 
-  def logLikelihood(globalVect: GlobalUpdateVector): Double = {
+  def perplexity(globalVect: GlobalUpdateVector): (Double, Double) = {
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
@@ -696,14 +696,10 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         }
       }
     }
-    ll
+    (math.exp(-ll / docs.map(_.size).sum), ll)
   }
 
-  def perplexity(globalVect: GlobalUpdateVector): Double =
-    math.exp(-logLikelihood(globalVect) / docs.map(_.size).sum)
-
-  def infer(origGlobalVect: GlobalUpdateVector):
-  Iterable[Int] = {
+  def infer(origGlobalVect: GlobalUpdateVector): Iterable[Int] = {
     val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
     for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
