@@ -685,18 +685,16 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
       val doc = docs(docIdx)
       for (wordIdx <- 0 until doc.size) {
         val word = doc(wordIdx)
-        if (vocab.contains(word)) {
-          val denom = alpha * topics + z.sum
-          for (topic <- 0 until topics) {
-            val b = globalVect.proportionWordAssignedTopic(word, topic)
-            w(topic) = b * (alpha + z(topic)) / denom
-          }
-          val s = w.sum
-          ll += math.log(s)
-          for (topic <- 0 until topics) {
-            w(topic) /= s
-            z(topic) += w(topic)
-          }
+        val denom = alpha * topics + z.sum
+        for (topic <- 0 until topics) {
+          val b = globalVect.proportionWordAssignedTopic(word, topic)
+          w(topic) = b * (alpha + z(topic)) / denom
+        }
+        val s = w.sum
+        ll += math.log(s)
+        for (topic <- 0 until topics) {
+          w(topic) /= s
+          z(topic) += w(topic)
         }
       }
     }
