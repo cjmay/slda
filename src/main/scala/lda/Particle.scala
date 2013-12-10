@@ -684,7 +684,8 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         val word = doc(wordIdx)
         val denom = alpha * topics + z.sum
         for (topic <- 0 until topics) {
-          val b = globalVect.proportionWordAssignedTopic(word, topic)
+          val b = (globalVect.numTimesWordAssignedTopic(word, topic) + beta) /
+            (globalVect.numTimesTopicAssignedTotal(topic) + vocabSize * beta)
           w(topic) = b * (alpha + z(topic)) / denom
         }
         val s = w.sum
