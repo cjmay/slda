@@ -3,12 +3,17 @@
 
 package wrangle
 
+import scala.util.matching.Regex
+import scala.collection.Iterator
+import scala.collection.mutable.HashMap
 import scala.io.Source
 import scala.annotation.tailrec
 import java.io.File
+import java.io.FilenameFilter
 import lda.Stats
 
 import edu.jhu.agiga.AgigaPrefs
+import edu.jhu.agiga.AgigaDocument
 import edu.jhu.agiga.StreamingDocumentReader
 
 
@@ -151,13 +156,45 @@ object TNG {
       List("alt.atheism", "rec.sport.baseball", "sci.space"))
 }
 
-class Gigaword {
-	val prefs = makePrefs
+class GigawordReader(dirname: String, regex: Regex) {
+  val prefs = new AgigaPrefs()
+  prefs.setAll(false)
+  prefs.setWord(true)
+  val files = new File(dirname).listFiles(new RegexFilter(regex))
+  val wordCounts = new HashMap[String,Int]()
+  var numDocs = Array.fill(files.length)(0)
+  for (i <- 0 until files.length) {
+    val file = files(i)
+    val reader = new StreamingDocumentReader(file.getPath(), prefs)
+    while (reader.hasNext) {
+      val sentenceIterator = reader.next.getSents.iterator
+      while (sentenceIterator.hasNext) {
+        val tokenIterator = sentenceIterator.next.getTokens.iterator
+        while (tokenIterator.hasNext) {
+          val token = tokenIterator.next
+          updateCounts(token.getWord)
+        }
+      }
+    }
+    numDocs(i) = reader.getNumDocs
+  }
 
-	private def makePrefs: AgigaPrefs = {
-		val p = new AgigaPrefs()
-		p.setAll(false)
-		p.setWord(true)
-		p
-	}
+  def order: Unit = {
+    val indices = (0 until numDocs.size).map(i => (0 until numDocs(i)).map(j => (i, j)).toArray).flatten
+    Stats.shuffle(indices)
+  }
+
+  private def updateCounts(word: String): Unit =
+    if (wordCounts.contains(word))
+      wordCounts(word) += 1
+    else
+      wordCounts(word) = 1
+}
+
+class RegexFilter(regex: Regex) extends FilenameFilter {
+  override def accept(dir: File, name: String): Boolean =
+    regex.findFirstIn(name) match {
+      case Some(s) => true
+      case None => false
+    }
 }
