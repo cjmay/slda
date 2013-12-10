@@ -676,8 +676,8 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Array.fill(doc.size)(0)
   })
 
-  def logLikelihood(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
-  Double = {
+  def perplexity(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
+  (Double, Double) = {
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
@@ -688,7 +688,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         val denom = alpha * topics + z.sum
         for (topic <- 0 until topics) {
           val b = (globalVect.numTimesWordAssignedTopic(word, topic) + beta) /
-            (globalVect.numTimesTopicAssignedTotal(topic) + vocabSize * beta)
+            (globalVect.numTimesTopicAssignedTotal(topic) + vocab.size * beta)
           w(topic) = b * (alpha + z(topic)) / denom
         }
         val s = w.sum
@@ -699,12 +699,8 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         }
       }
     }
-    ll
+    (math.exp(-ll / docs.map(_.size).sum), ll)
   }
-
-  def perplexity(globalVect: GlobalUpdateVector, vocab: HashSet[String]):
-  Double =
-    math.exp(-logLikelihood(globalVect, vocab) / docs.map(_.size).sum)
 
   def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int):
   Iterable[Int] = {
