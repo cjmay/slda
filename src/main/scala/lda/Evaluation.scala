@@ -59,33 +59,8 @@ object Evaluation {
 }
 
 
-class DualEvaluator(topics: Int,
-    cats: List[String],
-    inSampleLabels: Array[String],
-    inSampleInitSize: Int,
-    outOfSampleLabels: Array[String],
-    inferentialSampler: InferentialGibbsSampler) {
-  val numCats = cats.size
-
-  def inSampleEval(labels: Iterable[Int]): Unit = {
-    println(Evaluation.nmi(
-      labels, inSampleLabels.take(labels.size),
-      numCats, cats))
-  }
-
-  def inSampleNonInitEval(labels: Iterable[Int]): Unit = {
-    println(Evaluation.nmi(
-      labels.slice(inSampleInitSize, labels.size),
-      inSampleLabels.slice(inSampleInitSize, labels.size),
-      numCats, cats))
-  }
-
-  def outOfSampleEval(globalVect: GlobalUpdateVector):
-  Unit = {
-    val labels = inferentialSampler.infer(globalVect)
-    println(Evaluation.nmi(
-      labels, outOfSampleLabels.take(labels.size),
-      numCats, cats))
+class DualEvaluator(inferentialSampler: InferentialGibbsSampler) {
+  def outOfSampleEval(globalVect: GlobalUpdateVector): Unit = {
     val (perplexity, ll) = inferentialSampler.perplexity(globalVect)
     println("OUT-OF-SAMPLE PERPLEXITY " + perplexity)
     println("OUT-OF-SAMPLE LOG-LIKELIHOOD " + ll)

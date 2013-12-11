@@ -158,6 +158,8 @@ object TNG {
 }
 
 class GigawordReader(dirname: String, filenameRegex: Regex) {
+  val OOV = "_OOV_"
+  val blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
   val prefs = new AgigaPrefs()
   prefs.setAll(false)
   prefs.setWord(true)
@@ -172,13 +174,14 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
       while (sentenceIterator.hasNext) {
         val tokenIterator = sentenceIterator.next.getTokens.iterator
         while (tokenIterator.hasNext) {
-          val token = tokenIterator.next
-          updateCounts(token.getWord)
+          val word = tokenIterator.next.getWord
+          if (simpleFilter(word)) updateCounts(word)
         }
       }
     }
     numDocs(i) = reader.getNumDocs
   }
+  val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
 
   def shuffledDocs: Seq[Array[String]] = {
     val indices = Stats.shuffle(
@@ -197,12 +200,20 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
         while (sentenceIterator.hasNext) {
           val tokenIterator = sentenceIterator.next.getTokens.iterator
           while (tokenIterator.hasNext) {
-            val token = tokenIterator.next
-            words += token.getWord
+            val word = tokenIterator.next.getWord
+            if (simpleFilter(word)) words += word
           }
         }
         words.toArray
       }
+  }
+
+  def getVocab: Set[String] = vocab
+
+  /** Return true iff string is nonempty and not in blacklist */
+  private def simpleFilter(str: String): Boolean = {
+    val patt = new Regex("\\W");
+    (patt.findAllIn(str).size == 0) && !blacklist(str.toLowerCase)
   }
 
   private def updateCounts(word: String): Unit =

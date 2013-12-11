@@ -462,7 +462,6 @@ class Particle(val topics: Int, val initialWeight: Double,
   var weight = initialWeight
   var currDocVect = new DocumentUpdateVector(topics)
   var rejuvSeqDocVects: HashMap[Int,DocumentUpdateVector] = HashMap.empty
-  var docLabels: ArrayBuffer[Int] = ArrayBuffer.empty
 
   /** Update data structures for a new rejuvenation sequence that is
     * a subset of the current one, given a mapping from new
@@ -491,9 +490,6 @@ class Particle(val topics: Int, val initialWeight: Double,
       docVect.update(sampledTopic)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
     }
-
-    // Set default doc label
-    docLabels.append(0)
   }
 
   /** Generates an unnormalized weight for the particle; returns new
@@ -526,7 +522,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     if (tokenIdx != Constants.DidNotAddToSampler)
       assgStore.setTopic(particleId, docIdx, wordIdx, sampledTopic)
 
-    docLabels(docIdx) = docLabel(currDocVect)
     sampledTopic
   }
 
@@ -540,7 +535,6 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Create pointers and data structures for new document */
   def newDocumentUpdate(): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
-    docLabels.append(0) // Set default doc label
   }
 
   /** Rejuvenate particle by MCMC, using specified tokens as
@@ -564,7 +558,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     val sampledTopic = Stats.sampleCategorical(cdf)
 
     assignNewTopic(tokenIdx, sampledTopic)
-    docLabels(docIdx) = docLabel(rejuvSeqDocVects(tokenIdx))
   }
 
   /** Proper deep copy of the particle */
@@ -576,7 +569,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     copiedParticle.weight = weight
     val tmpCurrDocVect = currDocVect
     copiedParticle.currDocVect = currDocVect.copy
-    copiedParticle.docLabels = docLabels.clone
     assgStore.newParticle(newParticleId, particleId)
     copiedParticle.rejuvSeqDocVects = rejuvSeqDocVects.map({ kv =>
       kv._1 -> (if (kv._2 == tmpCurrDocVect) copiedParticle.currDocVect
@@ -666,14 +658,7 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 }
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
-    vocabSize: Int,
-    mcmcSteps: Int, docs: Array[Array[String]], joint: Boolean) {
-  val docLabels: Array[Int] = Array.fill(docs.size)(0)
-  val docVectors: Array[DocumentUpdateVector] = Array.fill(docs.size)(null)
-  val assignments: Array[Array[Int]] = docs.map({doc =>
-    Array.fill(doc.size)(0)
-  })
-
+    vocabSize: Int, docs: Array[Array[String]]) {
   def perplexity(globalVect: GlobalUpdateVector): (Double, Double) = {
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
@@ -698,70 +683,6 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     }
     (math.exp(-ll / docs.map(_.size).sum), ll)
   }
-
-  def infer(origGlobalVect: GlobalUpdateVector): Iterable[Int] = {
-    val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
-    for (docIdx <- 0 until docs.size) {
-      val doc = docs(docIdx)
-      val docAssignments = assignments(docIdx)
-      val docVect = new DocumentUpdateVector(topics)
-      docVectors(docIdx) = docVect
-      for (wordIdx <- 0 until doc.size) {
-        val word = doc(wordIdx)
-        val cdf = posterior(new UpdateStats(globalVect, docVect, word))
-        val sampledTopic = Stats.sampleCategorical(cdf)
-        docAssignments(wordIdx) = sampledTopic
-        if (joint) globalVect.update(word, sampledTopic)
-        docVect.update(sampledTopic)
-      }
-      docLabels(docIdx) = docLabel(docVect)
-    }
-
-    for (t <- 1 to mcmcSteps) {
-      for (docIdx <- 0 until docs.size) {
-        val doc = docs(docIdx)
-        val docAssignments = assignments(docIdx)
-        val docVect = docVectors(docIdx)
-        for (wordIdx <- 0 until doc.size) {
-          val word = doc(wordIdx)
-          val priorTopic = docAssignments(wordIdx)
-          val cdf = posterior(
-            new IncrementalStats(globalVect, docVect, priorTopic, word))
-          val sampledTopic = Stats.sampleCategorical(cdf)
-          docAssignments(wordIdx) = sampledTopic
-          if (joint) globalVect.resampledUpdate(word, priorTopic, sampledTopic)
-          docVect.resampledUpdate(priorTopic, sampledTopic)
-        }
-        docLabels(docIdx) = docLabel(docVect)
-      }
-    }
-
-    docLabels.toIterable
-  }
-
-  // TODO DRY
-  private def docLabel(docVect: DocumentUpdateVector): Int = {
-    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
-    (0 until topics).reduce({(t1, t2) =>
-      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
-    })
-  }
-
-  // TODO DRY
-  private def posterior(stats: CollapsedGibbsSufficientStats): Array[Double] = {
-    var unnormalizedCdf = Array.fill(topics)(0.0)
-    (0 until topics).foreach { i =>
-      unnormalizedCdf(i) = posteriorEqn(stats, i) }
-    Stats.normalizeAndMakeCdf(unnormalizedCdf)
-  }
-
-  // TODO DRY
-  private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
-                           topic: Int): Double =
-    (((stats.numTimesWordAssignedTopic(topic) + beta)
-            / (stats.numTimesTopicAssignedTotal(topic) + vocabSize * beta))
-      * ((stats.numTimesTopicOccursInDoc(topic) + alpha)
-              / (stats.wordsInDoc + topics * alpha)))
 }
 
 /** Tracks update progress for the document-specific ITERATIVE update
