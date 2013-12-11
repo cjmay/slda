@@ -168,8 +168,10 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
   var numDocs = Array.fill(files.length)(0)
   for (i <- 0 until files.length) {
     val file = files(i)
+		System.err.println(file.getPath())
     val reader = new StreamingDocumentReader(file.getPath(), prefs)
     while (reader.hasNext) {
+			System.err.print(".")
       val sentenceIterator = reader.next.getSents.iterator
       while (sentenceIterator.hasNext) {
         val tokenIterator = sentenceIterator.next.getTokens.iterator
@@ -179,6 +181,7 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
         }
       }
     }
+		System.err.println
     numDocs(i) = reader.getNumDocs
   }
   val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet

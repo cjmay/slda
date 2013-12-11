@@ -21,11 +21,9 @@ abstract class RunLdaParams {
   val seed: Long = 0
   val fixInitialSample: Boolean = true
   val fixInitialModel: Boolean = false
-  val inferMcmcSteps: Int = 5
-  val inferJoint: Boolean = false
 	val dataDir: String = "/export/common/data/corpora/LDC/LDC2012T21/data/xml"
-  val trainDataRegex: Regex = """nyt_eng_1994\d\d\.xml\.gz""".r
-  val testDataRegex: Regex = """nyt_eng_1995\d\d\.xml\.gz""".r
+  val trainDataRegex: Regex = """nyt_eng_199407\.xml\.gz""".r
+  val testDataRegex: Regex = """nyt_eng_199408\.xml\.gz""".r
 }
 
 object GigaParams extends RunLdaParams { }
