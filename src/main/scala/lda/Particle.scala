@@ -525,13 +525,6 @@ class Particle(val topics: Int, val initialWeight: Double,
     sampledTopic
   }
 
-  def docLabel(docVect: DocumentUpdateVector): Int = {
-    val topicCounts = (0 until topics).map(docVect.timesTopicOccursInDoc(_))
-    (0 until topics).reduce({(t1, t2) =>
-      if (topicCounts(t1) >= topicCounts(t2)) t1 else t2
-    })
-  }
-
   /** Create pointers and data structures for new document */
   def newDocumentUpdate(): Unit = {
     currDocVect = new DocumentUpdateVector(topics)
