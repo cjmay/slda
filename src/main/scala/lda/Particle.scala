@@ -3,6 +3,8 @@ package lda
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
+import scala.math
+import scala.collection.mutable.HashSet
 
 import globals.Constants
 import stream._
@@ -16,6 +18,7 @@ object Particle {
   * particle manipulation, copying, reading, etc
   */
 class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
+                    val vocabSize: Int,
                     val numParticles: Int, val ess: Double,
                     val rejuvBatchSize: Int, val rejuvMcmcSteps: Int,
                     var rejuvSeq: ReservoirSampler[Particle.DocumentToken]) {
@@ -36,8 +39,8 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     for (i <- 0 until numParticles) {
       val id = newParticleId()
       store.newParticle(id, Constants.NoParent)
-      particles(i) = new Particle(T, 1.0/numParticles, alpha, beta, rejuvSeq,
-                                  store, id)
+      particles(i) = new Particle(T, 1.0/numParticles, alpha, beta,
+                                  vocabSize, rejuvSeq, store, id)
     }
     (store, particles)
   }
@@ -46,9 +49,9 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * for the data. UNNORMALIZED. Does this for every particle.
     * Corresponds to line 4 of Algorithm 4 in Canini paper
     */
-  def unnormalizedReweightAll(word: String, currVocabSize: Int): Unit =
+  def unnormalizedReweightAll(word: String): Unit =
     particles.foreach { p =>
-      p.unnormalizedReweight(word, currVocabSize)
+      p.unnormalizedReweight(word)
     }
 
   /** Normalizes particle weights to sum to one */
@@ -59,7 +62,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   }
 
   /** Transition every particle (see Particle.transition(...)) */
-  def transitionAll(wordIdx: Int, word: String, currVocabSize: Int,
+  def transitionAll(wordIdx: Int, word: String,
                     docIdx: Int): Unit = {
     val token = new Particle.DocumentToken(docIdx, wordIdx, word)
     val (tokenIdx, wasEjected, ejectedToken) = rejuvSeq.addItem(token)
@@ -68,7 +71,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
       assgStore.removeAll(oldDocIdx, oldWordIdx)
     }
     particles.foreach { p =>
-      p.transition(tokenIdx, token, currVocabSize)
+      p.transition(tokenIdx, token)
     }
   }
 
@@ -84,7 +87,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   /** Resample particles proportional to their probability */
   def resample(unnormalizedWeights: Array[Double]): Unit = {
     val total = unnormalizedWeights.sum
-    System.err.println("WEIGHTS " + unnormalizedWeights.map((w: Double) =>
+    println("WEIGHTS " + unnormalizedWeights.map((w: Double) =>
       (w / total).toString
     ).reduceLeft((x: String, y: String) =>
       x + " " + y
@@ -104,23 +107,23 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
   /** Resamples particles and rejuvenates, sampling the rejuvenation
     * sequence from the specified tokens
     */
-  def resampleAndRejuvenate(tokenIds: Array[Int], currVocabSize: Int): Unit = {
+  def resampleAndRejuvenate(tokenIds: Array[Int]): Unit = {
     // resample particles and prune tree
     val prevParticleIds = particles.map(_.particleId)
     resample(particleWeightArray)
     assgStore.prune(prevParticleIds)
 
     // pick rejuvenation sequence in the reservoir
-    rejuvenateAll(tokenIds, rejuvBatchSize, rejuvMcmcSteps, currVocabSize)
+    rejuvenateAll(tokenIds, rejuvBatchSize, rejuvMcmcSteps)
     uniformReweightAll()
   }
 
   /** Perform rejuvenation MCMC for every particle */
-  def rejuvenateAll(tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int,
-                    currVocabSize: Int): Unit = {
+  def rejuvenateAll(tokenIds: Array[Int], batchSize: Int, mcmcSteps: Int):
+  Unit = {
     val sample = Stats.sampleWithoutReplacement(tokenIds, batchSize)
     particles.foreach { p =>
-      p.rejuvenate(sample, mcmcSteps, currVocabSize)
+      p.rejuvenate(sample, mcmcSteps)
     }
   }
 
@@ -131,7 +134,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     * update data structures to prepare for particle filtering.
     */
   def initialize(docs: Array[Array[String]], mcmcSteps: Int,
-                 currVocabSize: Int, reservoirSize: Int): Unit = {
+                 reservoirSize: Int): Unit = {
     println("* initializing model using MCMC over " + docs.size + " documents")
 
     val p = particles(0)
@@ -148,7 +151,7 @@ class ParticleStore(val T: Int, val alpha: Double, val beta: Double,
     }).toArray
 
     // Do initial batch iterations
-    p.rejuvenate(allTokenIds.flatten, mcmcSteps, currVocabSize)
+    p.rejuvenate(allTokenIds.flatten, mcmcSteps)
 
     println("* transitioning to particle filter")
 
@@ -449,6 +452,7 @@ class AssignmentMap {
  basically determine what the run of LDA does next. */
 class Particle(val topics: Int, val initialWeight: Double,
                val alpha: Double, val beta: Double,
+               val vocabSize: Int,
                val rejuvSeq: ReservoirSampler[Particle.DocumentToken],
                var assgStore: AssignmentStore, val particleId: Int) {
   /* NOTE: `rejuvSeq` depends on the PfLda class to populate it with the
@@ -495,9 +499,9 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Generates an unnormalized weight for the particle; returns new
     * wgt. NOTE: side-effects on the particle's weight as well!
     */
-  def unnormalizedReweight(word: String, currVocabSize: Int): Double = {
+  def unnormalizedReweight(word: String): Double = {
     // TODO how/why is this correct?
-    val prior = unnormalizedPrior(word, currVocabSize)
+    val prior = unnormalizedPrior(word)
     weight = weight * prior
     weight
   }
@@ -509,14 +513,12 @@ class Particle(val topics: Int, val initialWeight: Double,
     * we must update the topic assignments if this document happens to
     * be in our reservoir.
     */
-  def transition(tokenIdx: Int, token: Particle.DocumentToken,
-                 currVocabSize: Int): Int = {
+  def transition(tokenIdx: Int, token: Particle.DocumentToken): Int = {
     val (docIdx, wordIdx, word) = token
     if (tokenIdx != Constants.DidNotAddToSampler)
       rejuvSeqDocVects(tokenIdx) = currDocVect
 
-    val cdf = posterior(new UpdateStats(globalVect, currDocVect, word),
-                        currVocabSize)
+    val cdf = posterior(new UpdateStats(globalVect, currDocVect, word))
     val sampledTopic = Stats.sampleCategorical(cdf)
     globalVect.update(word, sampledTopic)
     currDocVect.update(sampledTopic)
@@ -544,23 +546,21 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Rejuvenate particle by MCMC, using specified tokens as
     * rejuvenation sequence and iterating for mcmcSteps.
     */
-  def rejuvenate(tokenIds: Array[Int], mcmcSteps: Int,
-                 currVocabSize: Int): Unit = {
+  def rejuvenate(tokenIds: Array[Int], mcmcSteps: Int): Unit = {
     for (i <- 1 to mcmcSteps) {
       tokenIds.foreach{ tokenIdx =>
-        resampleRejuvSeqWord(tokenIdx, currVocabSize)
+        resampleRejuvSeqWord(tokenIdx)
       }
     }
   }
 
   /** Resample a word in the rejuvenation sequence */
-  def resampleRejuvSeqWord(tokenIdx: Int, currVocabSize: Int): Unit = {
+  def resampleRejuvSeqWord(tokenIdx: Int): Unit = {
     val (docIdx, wordIdx, word) = rejuvSeq(tokenIdx)
     val docVect = rejuvSeqDocVects(tokenIdx)
     val priorTopic = assgStore.getTopic(particleId, docIdx, wordIdx)
     val cdf = posterior(
-      new IncrementalStats(globalVect, docVect, priorTopic, word),
-      currVocabSize)
+      new IncrementalStats(globalVect, docVect, priorTopic, word))
     val sampledTopic = Stats.sampleCategorical(cdf)
 
     assignNewTopic(tokenIdx, sampledTopic)
@@ -570,6 +570,7 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Proper deep copy of the particle */
   def copy(newParticleId: Int): Particle = {
     val copiedParticle = new Particle(topics, initialWeight, alpha, beta,
+                                      vocabSize,
                                       rejuvSeq, assgStore, newParticleId)
     copiedParticle.globalVect = globalVect.copy
     copiedParticle.weight = weight
@@ -597,24 +598,22 @@ class Particle(val topics: Int, val initialWeight: Double,
   /** Results in a number proportional to P(w_i|z_{i-1}, w_{i-1});
    specifically, we note that this probability is proportional to
    P(w_i|z_{i-1}^{(p)}) P(z_{i-1}^{(p)}|d_i). */
-  private def unnormalizedPrior(word: String, currVocabSize: Int): Double =
+  private def unnormalizedPrior(word: String): Double =
     (0 until topics).map { t =>
-      posteriorEqn(new UpdateStats(globalVect, currDocVect, word),
-                   t, currVocabSize)
+      posteriorEqn(new UpdateStats(globalVect, currDocVect, word), t)
     }.sum
 
-  private def posterior(stats: CollapsedGibbsSufficientStats,
-                        currVocabSize: Int): Array[Double] = {
+  private def posterior(stats: CollapsedGibbsSufficientStats): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
     (0 until topics).foreach { i =>
-      unnormalizedCdf(i) = posteriorEqn(stats, i, currVocabSize) }
+      unnormalizedCdf(i) = posteriorEqn(stats, i) }
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
   private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
-                           topic: Int, currVocabSize: Int): Double =
+                           topic: Int): Double =
     (((stats.numTimesWordAssignedTopic(topic) + beta)
-            / (stats.numTimesTopicAssignedTotal(topic) + currVocabSize * beta))
+            / (stats.numTimesTopicAssignedTotal(topic) + vocabSize * beta))
       * ((stats.numTimesTopicOccursInDoc(topic) + alpha)
               / (stats.wordsInDoc + topics * alpha)))
 }
@@ -667,6 +666,7 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 }
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
+    vocabSize: Int,
     mcmcSteps: Int, docs: Array[Array[String]], joint: Boolean) {
   val docLabels: Array[Int] = Array.fill(docs.size)(0)
   val docVectors: Array[DocumentUpdateVector] = Array.fill(docs.size)(null)
@@ -674,8 +674,32 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     Array.fill(doc.size)(0)
   })
 
-  def infer(origGlobalVect: GlobalUpdateVector, currVocabSize: Int):
-  Iterable[Int] = {
+  def perplexity(globalVect: GlobalUpdateVector): (Double, Double) = {
+    val w = Array.fill(topics)(0.0)
+    val z = Array.fill(topics)(0.0)
+    var ll = 0.0
+    for (docIdx <- 0 until docs.size) {
+      val doc = docs(docIdx)
+      for (wordIdx <- 0 until doc.size) {
+        val word = doc(wordIdx)
+        val denom = alpha * topics + z.sum
+        for (topic <- 0 until topics) {
+          val b = (globalVect.numTimesWordAssignedTopic(word, topic) + beta) /
+            (globalVect.numTimesTopicAssignedTotal(topic) + vocabSize * beta)
+          w(topic) = b * (alpha + z(topic)) / denom
+        }
+        val s = w.sum
+        ll += math.log(s)
+        for (topic <- 0 until topics) {
+          w(topic) /= s
+          z(topic) += w(topic)
+        }
+      }
+    }
+    (math.exp(-ll / docs.map(_.size).sum), ll)
+  }
+
+  def infer(origGlobalVect: GlobalUpdateVector): Iterable[Int] = {
     val globalVect = if (joint) origGlobalVect.copy else origGlobalVect
     for (docIdx <- 0 until docs.size) {
       val doc = docs(docIdx)
@@ -684,8 +708,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
       docVectors(docIdx) = docVect
       for (wordIdx <- 0 until doc.size) {
         val word = doc(wordIdx)
-        val cdf = posterior(new UpdateStats(globalVect, docVect, word),
-                            currVocabSize)
+        val cdf = posterior(new UpdateStats(globalVect, docVect, word))
         val sampledTopic = Stats.sampleCategorical(cdf)
         docAssignments(wordIdx) = sampledTopic
         if (joint) globalVect.update(word, sampledTopic)
@@ -703,8 +726,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
           val word = doc(wordIdx)
           val priorTopic = docAssignments(wordIdx)
           val cdf = posterior(
-            new IncrementalStats(globalVect, docVect, priorTopic, word),
-            currVocabSize)
+            new IncrementalStats(globalVect, docVect, priorTopic, word))
           val sampledTopic = Stats.sampleCategorical(cdf)
           docAssignments(wordIdx) = sampledTopic
           if (joint) globalVect.resampledUpdate(word, priorTopic, sampledTopic)
@@ -726,19 +748,18 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
   }
 
   // TODO DRY
-  private def posterior(stats: CollapsedGibbsSufficientStats,
-      currVocabSize: Int): Array[Double] = {
+  private def posterior(stats: CollapsedGibbsSufficientStats): Array[Double] = {
     var unnormalizedCdf = Array.fill(topics)(0.0)
     (0 until topics).foreach { i =>
-      unnormalizedCdf(i) = posteriorEqn(stats, i, currVocabSize) }
+      unnormalizedCdf(i) = posteriorEqn(stats, i) }
     Stats.normalizeAndMakeCdf(unnormalizedCdf)
   }
 
   // TODO DRY
   private def posteriorEqn(stats: CollapsedGibbsSufficientStats,
-                           topic: Int, currVocabSize: Int): Double =
+                           topic: Int): Double =
     (((stats.numTimesWordAssignedTopic(topic) + beta)
-            / (stats.numTimesTopicAssignedTotal(topic) + currVocabSize * beta))
+            / (stats.numTimesTopicAssignedTotal(topic) + vocabSize * beta))
       * ((stats.numTimesTopicOccursInDoc(topic) + alpha)
               / (stats.wordsInDoc + topics * alpha)))
 }
@@ -793,6 +814,10 @@ class GlobalUpdateVector(val topics: Int) {
 
   def numTimesTopicAssignedTotal(topic: Int): Int =
     timesTopicAssignedTotal(topic)
+
+  def proportionWordAssignedTopic(word: String, topic: Int): Double =
+    (numTimesWordAssignedTopic(word, topic).toDouble
+      / numTimesTopicAssignedTotal(topic).toDouble)
 
   /** Updates vector based on observation: word and topic assigned to it */
   def update(word: String, topic: Int): Unit = {

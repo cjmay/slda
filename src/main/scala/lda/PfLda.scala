@@ -1,8 +1,6 @@
 package lda
 
 import java.io.PrintWriter
-import scala.collection.mutable.HashSet
-import scala.util.matching.Regex
 
 import globals.Constants
 import stream._
@@ -21,38 +19,26 @@ import evaluation._
  * @param rejuvMcmcSteps number of steps to run rejuv MCMC before stopping
  */
 class PfLda(val T: Int, val alpha: Double, val beta: Double,
+            val vocab: Set[String],
             val reservoirSize: Int, val numParticles: Int, ess: Double,
             val rejuvBatchSize: Int, val rejuvMcmcSteps: Int) {
-  val Blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
-  var vocab: HashSet[String] = HashSet.empty
   var currTokenNum = -1 // Just used for diagnostics
   var particles: ParticleStore = null
   var rejuvSeq: ReservoirSampler[Particle.DocumentToken] = null
 
-  /** Return true iff string is nonempty and not in Blacklist */
-  private def simpleFilter(str: String): Boolean = {
-    val patt = new Regex("\\W");
-    (patt.findAllIn(str).size == 0) && !Blacklist(str.toLowerCase)
-  }
-
   /** Initialize model with batch MCMC.
     * Must be called before ingestDoc/ingestDocs.
     */
-  def initialize(docs: Array[String], mcmcSteps: Int): Unit = {
-    val docsTokens = docs.map(makeBOW(_))
-    vocab ++= docsTokens.flatten.toStream
-
-    val totalNumTokens = docsTokens.map(_.size).sum
+  def initialize(docs: Array[Array[String]], mcmcSteps: Int): Unit = {
+    val totalNumTokens = docs.map(_.size).sum
     currTokenNum += totalNumTokens
     rejuvSeq = new ReservoirSampler(totalNumTokens)
-    particles = new ParticleStore(T, alpha, beta, numParticles, ess,
+    particles = new ParticleStore(T, alpha, beta, vocab.size,
+                                  numParticles, ess,
                                   rejuvBatchSize, rejuvMcmcSteps, rejuvSeq)
 
-    particles.initialize(docsTokens, mcmcSteps, vocab.size, reservoirSize)
+    particles.initialize(docs, mcmcSteps, reservoirSize)
   }
-
-  /** Tokenize doc and remove stop words */
-  def makeBOW(doc: String): Array[String] = Text.bow(doc, simpleFilter(_))
 
   /** Ingest one document, update LDA as we go.
     * For each new word, we reweight the particles. Then we sample a
@@ -60,9 +46,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * weight vector lies below a certain threshold, we resample the
     * topics
     */
-  def ingestDoc(doc: String, evaluator: DualEvaluator): Int = {
-    val words = makeBOW(doc)
-
+  def ingestDoc(words: Array[String], evaluator: DualEvaluator): Int = {
     val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
     (0 until words.length).foreach { i =>
@@ -72,7 +56,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
       println("TIMEPERWORD " + ((System.currentTimeMillis - now)/words.length))
       println("NUMWORDS " + words.length)
     }
-    println("VOCAB " + vocab.size)
 
     println
 
@@ -91,7 +74,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     print("IN-SAMPLE-NON-INIT NMI ")
     evaluator.inSampleNonInitEval(p.docLabels)
     print("OUT-OF-SAMPLE NMI ")
-    evaluator.outOfSampleEval(p.globalVect, vocab.size)
+    evaluator.outOfSampleEval(p.globalVect)
   }
 
   /** Process the ith entry in `words`; copied pretty much verbatim from
@@ -100,20 +83,18 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
   private def processWord(i: Int, words: Array[String], docIdx: Int,
       evaluator: DualEvaluator): Unit = {
     val word = words(i)
-    vocab += word
     currTokenNum += 1
 
-    particles.unnormalizedReweightAll(word, vocab.size)
+    particles.unnormalizedReweightAll(word)
 
     if (i == 0) evaluate(evaluator)
 
-    particles.transitionAll(i, words(i), vocab.size, docIdx)
+    particles.transitionAll(i, words(i), docIdx)
     particles.normalizeWeights()
 
     if (particles.shouldResample) {
       println("REJUVENATE " + currTokenNum)
-      particles.resampleAndRejuvenate((0 until rejuvSeq.occupied).toArray,
-        vocab.size)
+      particles.resampleAndRejuvenate((0 until rejuvSeq.occupied).toArray)
     }
   }
 
@@ -141,12 +122,10 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     pw.close()
   }
 
-  /** print total percentage a word as it occurs in each particular
-    * topic
-    */
   def printTopics: Unit = {
     val particleObjs = particles.particles
 
+    println("PRINT TOPICS")
     for (p <- 0 to particleObjs.length-1) {
       println("PARTICLE " + p)
       val countVctr = particleObjs(p).globalVect

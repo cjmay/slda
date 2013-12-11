@@ -1,5 +1,8 @@
 package lda
 
+import scala.util.matching.Regex
+
+import globals.Constants
 import evaluation._
 import wrangle._
 import scala.util.matching.Regex
@@ -28,6 +31,22 @@ abstract class RunLdaParams {
 object GigaParams extends RunLdaParams { }
 
 object RunLda {
+  val OOV = "_OOV_"
+  val blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
+
+  private def substituteOOV(word: String, vocab: Set[String]): String =
+    if (vocab.contains(word)) word else OOV
+
+  /** Return true iff string is nonempty and not in blacklist */
+  private def simpleFilter(str: String): Boolean = {
+    val patt = new Regex("\\W");
+    (patt.findAllIn(str).size == 0) && !blacklist(str.toLowerCase)
+  }
+
+  /** Tokenize doc and remove stop words */
+  private def makeBOW(doc: String): Array[String] =
+    Text.bow(doc, simpleFilter(_))
+
   def main (args: Array[String]) {
     val params: RunLdaParams = GigaParams
 
@@ -51,8 +70,45 @@ object RunLda {
     if (params.fixInitialSample && ! params.fixInitialModel)
       Stats.setDefaultSeed()
 
+    // Compute vocabulary as OOV symbol plus all non-singletons in
+    // training data
+    val vocab = Set(OOV) ++
+      corpus.
+      flatten.
+      groupBy(identity).
+      mapValues(_.size).
+      filter(p => p._2 > 1).
+      keySet
+    println("vocab size " + vocab.size)
+
+    // Replace singletons with OOV
+    for (docIdx <- 0 until corpus.size) {
+      val doc = corpus(docIdx)
+      for (wordIdx <- 0 until doc.size) {
+        doc(wordIdx) = substituteOOV(doc(wordIdx), vocab)
+      }
+    }
+
+    println("training size " + corpus.map(_.size).sum)
+    println("training num OOV "
+      + corpus.map(d => d.filter(_ == OOV).size).sum)
+
+    val inferDocsTokens =
+      params.testCorpus.map(makeBOW(_).map(substituteOOV(_, vocab)))
+    var inferentialSampler = new InferentialGibbsSampler(params.cats.size,
+      params.alpha, params.beta, vocab.size,
+      params.inferMcmcSteps, inferDocsTokens,
+      params.inferJoint)
+    val evaluator = new DualEvaluator(params.cats.size, params.cats,
+      labels, params.initialBatchSize, params.testLabels, inferentialSampler)
+
+    println("testing size " + inferDocsTokens.map(_.size).sum)
+    println("testing num OOV "
+      + inferDocsTokens.map(d => d.filter(_ == OOV).size).sum)
+
     println("initializing model...")
     val model = new PfLda(params.topics, params.alpha, params.beta,
+                          vocab,
                           params.reservoirSize, params.numParticles,
                           params.ess, params.rejuvBatchSize,
                           params.rejuvMcmcSteps)
