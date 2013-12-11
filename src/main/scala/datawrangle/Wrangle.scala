@@ -6,6 +6,7 @@ package wrangle
 import scala.util.matching.Regex
 import scala.collection.Iterator
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 import scala.annotation.tailrec
 import java.io.File
@@ -156,11 +157,11 @@ object TNG {
       List("alt.atheism", "rec.sport.baseball", "sci.space"))
 }
 
-class GigawordReader(dirname: String, regex: Regex) {
+class GigawordReader(dirname: String, filenameRegex: Regex) {
   val prefs = new AgigaPrefs()
   prefs.setAll(false)
   prefs.setWord(true)
-  val files = new File(dirname).listFiles(new RegexFilter(regex))
+  val files = new File(dirname).listFiles(new RegexFilter(filenameRegex))
   val wordCounts = new HashMap[String,Int]()
   var numDocs = Array.fill(files.length)(0)
   for (i <- 0 until files.length) {
@@ -179,9 +180,29 @@ class GigawordReader(dirname: String, regex: Regex) {
     numDocs(i) = reader.getNumDocs
   }
 
-  def order: Unit = {
-    val indices = (0 until numDocs.size).map(i => (0 until numDocs(i)).map(j => (i, j)).toArray).flatten
-    Stats.shuffle(indices)
+  def shuffledDocs: Seq[Array[String]] = {
+    val indices = Stats.shuffle(
+      (0 until numDocs.size).map(
+        i => (0 until numDocs(i)).map(
+          j => (i, j)
+        ).toArray
+      ).flatten)
+    for ((i, j) <- indices)
+      yield {
+        val file = files(i)
+        val reader = new StreamingDocumentReader(file.getPath(), prefs)
+        for (k <- 0 until j) reader.next
+        val words = new ArrayBuffer[String]()
+        val sentenceIterator = reader.next.getSents.iterator
+        while (sentenceIterator.hasNext) {
+          val tokenIterator = sentenceIterator.next.getTokens.iterator
+          while (tokenIterator.hasNext) {
+            val token = tokenIterator.next
+            words += token.getWord
+          }
+        }
+        words.toArray
+      }
   }
 
   private def updateCounts(word: String): Unit =
