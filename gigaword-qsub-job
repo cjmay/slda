@@ -1,0 +1,13 @@
+#!/bin/sh
+#$ -cwd
+#$ -j y
+#$ -t 1-10
+#$ -tc 2
+#$ -V
+#$ -l num_proc=1,mem_free=24G,h_rt=24:00:00
+#$ -N "slda"
+export JAVA_HOME="/export/apps/java/bin/java"
+export PATH="/export/apps/sbt-0.12.1/bin:$PATH"
+export PATH="/export/apps/scala-2.9.2/bin:$PATH"
+scala -J-Xmx12G -J-Xms12G -J-XX:+UseSerialGC -classpath target/scala-2.9.2/slda_2.9.2-1.0.0.jar lda.RunLda
+gzip results/results.txt
