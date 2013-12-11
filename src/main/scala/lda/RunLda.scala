@@ -98,6 +98,7 @@ object RunLda {
       val doc = trainDocsIter.next
       println("DOCUMENT " + i)
       model.ingestDoc(doc, evaluator)
+      i += 1
     }
     model.evaluate(evaluator)
     model.writeTopics("results.txt")
