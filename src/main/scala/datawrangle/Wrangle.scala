@@ -198,17 +198,39 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
         val file = files(i)
         val reader = new StreamingDocumentReader(file.getPath(), prefs)
         for (k <- 0 until j) reader.next
-        val words = new ArrayBuffer[String]()
-        val sentenceIterator = reader.next.getSents.iterator
-        while (sentenceIterator.hasNext) {
-          val tokenIterator = sentenceIterator.next.getTokens.iterator
-          while (tokenIterator.hasNext) {
-            val word = tokenIterator.next.getWord
-            if (simpleFilter(word)) words += word
-          }
-        }
-        words.toArray
+        docToWords(reader.next)
       }
+  }
+
+  def docs: Seq[Array[String]] =
+    for (i <- 0 until files.size; doc <- readerToDocs(fileToReader(files(i))))
+      yield docToWords(doc)
+
+  def fileToReader(file: File): StreamingDocumentReader =
+    new StreamingDocumentReader(file.getPath(), prefs)
+
+  def readerToDocs(reader: StreamingDocumentReader): Seq[AgigaDocument] =
+    readerToDocsHelper(reader, Seq.empty)
+
+  @tailrec
+  private def readerToDocsHelper(reader: StreamingDocumentReader,
+      seq: Seq[AgigaDocument]): Seq[AgigaDocument] =
+    if (reader.hasNext)
+      readerToDocsHelper(reader, reader.next +: seq)
+    else
+      seq
+
+  def docToWords(doc: AgigaDocument): Array[String] = {
+    val words = new ArrayBuffer[String]()
+    val sentenceIterator = doc.getSents.iterator
+    while (sentenceIterator.hasNext) {
+      val tokenIterator = sentenceIterator.next.getTokens.iterator
+      while (tokenIterator.hasNext) {
+        val word = tokenIterator.next.getWord
+        if (simpleFilter(word)) words += word
+      }
+    }
+    words.toArray
   }
 
   def getVocab: Set[String] = vocab

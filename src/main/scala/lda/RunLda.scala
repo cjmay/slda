@@ -50,7 +50,7 @@ object RunLda {
     val trainData = new GigawordReader(params.dataDir, params.trainDataRegex)
     val testData = new GigawordReader(params.dataDir, params.testDataRegex)
 
-    val trainDocs = trainData.shuffledDocs
+    val trainDocs = trainData.docs
     
     // If we fixed a random seed for the data shuffle but want a random
     // Gibbs initialization, reinitialize seed randomly
@@ -61,7 +61,7 @@ object RunLda {
     println("vocab size " + vocab.size)
 
     val inferDocsTokens =
-      testData.shuffledDocs.map(d => d.map(substituteOOV(_, vocab))).toArray
+      testData.docs.map(d => d.map(substituteOOV(_, vocab))).toArray
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
       params.alpha, params.beta, vocab.size, inferDocsTokens)
     val evaluator = new DualEvaluator(inferentialSampler)
