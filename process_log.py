@@ -3,6 +3,7 @@
 
 import os.path
 import sys
+import re
 
 
 LOG_STEM = 'slda.o'
@@ -16,25 +17,22 @@ PER_DOC_STAT_NAMES = (
     'TIMEPERWORD',
 )
 
+BADNESS_RE = re.compile(r'\W')
+
 
 class LogData(object):
-    def __init__(self, doc_nums, rejuvenations, num_words, per_doc_stats):
-        self.doc_nums = doc_nums
-        self.rejuvenations = rejuvenations
+    def __init__(self, num_words, per_doc_stats):
         self.num_words = num_words
         self.per_doc_stats = per_doc_stats
 
 
 class AggLogData(object):
-    BADNESS_RE = re.compile(r'\W')
-
     def __init__(self):
-        self.per_doc_stats = dict((stat_name, []) for stat_name in PER_DOC_STAT_NAMES)
+        self.num_words = []
+        self.per_doc_stats = dict((normalize_stat_name(name), []) for name in PER_DOC_STAT_NAMES + ('num_rejuvenations',))
 
-    def normalize_stat_name(self, name):
-        return BADNESS_RE.subn('_', name.lower())
-
-    def num_runs(self):
+    def num_runs(self, stat_name):
+        stats = self.per_doc_stats[stat_name]
         if stats:
             return len(stats[0])
         else:
@@ -44,18 +42,20 @@ class AggLogData(object):
         return ['NA' for i in range(n)]
 
     def add(self, log_data):
-        for stat_name in per_doc_stats:
+        self.num_words += log_data.num_words[len(self.num_words):]
+
+        for stat_name in self.per_doc_stats:
             run_stats = log_data.per_doc_stats[stat_name]
             stats = self.per_doc_stats[stat_name]
 
             # Adjust for any differences in lengths
             if len(stats) == 0:
                 # initialize to empty arrays
-                stats += [[] for i in range(len(run_stats)]
+                stats += [[] for i in range(len(run_stats))]
             elif len(run_stats) > len(stats):
                 # pad stats with arrays of NA records
                 pad_len = len(run_stats) - len(stats)
-                stats += [self.make_na(self.num_runs()) for j in range(pad_len)]
+                stats += [self.make_na(self.num_runs(stat_name)) for j in range(pad_len)]
             elif len(run_stats) < len(stats):
                 # pad run_stats with NA records
                 pad_len = len(stats) - len(run_stats)
@@ -66,14 +66,23 @@ class AggLogData(object):
                 stats[i].append(run_stats[i])
 
     def write(self, filename_template):
+        filename = filename_template % normalize_stat_name('num_words')
+        with open(filename, 'w') as f:
+            for n in self.num_words:
+                f.write(str(n) + '\n')
+
         for stat_name in self.per_doc_stats:
             stats = self.per_doc_stats[stat_name]
-            filename = filename_template % self.normalize_stat_name(stat_name)
+            filename = filename_template % normalize_stat_name(stat_name)
             with open(filename, 'w') as f:
-                f.write('\t'.join('run.%d' % i for i in range(self.num_runs())) + '\n')
+                f.write('\t'.join(('run.%d' % i) for i in range(self.num_runs(stat_name))) + '\n')
                 for iter_stats in stats:
                     f.write('\t'.join(str(x) for x in iter_stats) + '\n')
             
+
+
+def normalize_stat_name(name):
+    return BADNESS_RE.subn('_', name.lower())[0]
 
 
 def process_logs(experiment_path):
@@ -83,22 +92,19 @@ def process_logs(experiment_path):
     for dataset_entry in os.listdir(experiment_path):
         agg_log_data = AggLogData()
         dataset_path = os.path.join(experiment_path, dataset_entry)
-        if not os.path.isdir(dataset_path):
-            raise Exception(dataset_path + ' is not a directory')
-        for entry in os.listdir(dataset_path):
-            path = os.path.join(dataset_path, entry)
-            if os.path.isfile(path) and entry.startswith(LOG_STEM):
-                agg_log_data.add(parse_log(path))
-        agg_log_data.write(dataset_path + '_%s.tab')
+        if os.path.isdir(dataset_path):
+            for entry in os.listdir(dataset_path):
+                path = os.path.join(dataset_path, entry)
+                if os.path.isfile(path) and entry.startswith(LOG_STEM):
+                    agg_log_data.add(parse_log(path))
+            agg_log_data.write(dataset_path + '_%s.tab')
 
 
 def parse_log(log_filename):
     with open(log_filename) as f:
-        doc_num = None
-        doc_nums = []
-        rejuvenations = []
+        doc_rejuvenations = None
         num_words = []
-        per_doc_stats = dict((stat_name, []) for stat_name in PER_DOC_STAT_NAMES)
+        per_doc_stats = dict((normalize_stat_name(name), []) for name in PER_DOC_STAT_NAMES + ('num_rejuvenations',))
         for line in f:
             line = line.strip()
 
@@ -110,19 +116,20 @@ def parse_log(log_filename):
                 key = None
                 val = None
 
-            if key == 'DOCUMENT':
-                doc_num = int(val)
-                doc_nums.append(doc_num)
+            if line.startswith('DOCUMENT '):
+                if doc_rejuvenations is not None:
+                    per_doc_stats[normalize_stat_name('num_rejuvenations')].append(len(doc_rejuvenations))
+                doc_rejuvenations = []
             elif key == 'REJUVENATE':
-                rejuvenations.append((doc_num, int(val)))
+                doc_rejuvenations.append(int(val))
             elif key == 'NUMWORDS':
                 num_words.append(int(val))
             elif key in PER_DOC_STAT_NAMES:
-                per_doc_stats[key].append(float(val))
+                per_doc_stats[normalize_stat_name(key)].append(val)
             elif line == 'WRITE TOPICS':
                 break
 
-    return LogData(doc_nums, rejuvenations, num_words, **per_doc_stats)
+    return LogData(num_words, per_doc_stats)
 
 
 if __name__ == '__main__':
