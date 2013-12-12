@@ -30,7 +30,7 @@ plot.experiments <- function(experiment.group.name, dataset.names, experiment.na
             dir.create('plots')
             dir.create(paste('plots', experiment.group.name, sep='/'))
             filename.out <- paste('plots', experiment.group.name, paste(dataset.name, '_', stat.name, '.png', sep=''), sep='/')
-            qplot(idx, mean, data=data, group=experiment) + geom_smooth(aes(fill=experiment, ymin=lcl, ymax=ucl, color=experiment), data=data, stat="identity") + ylab('nmi (mean +/- stdev)') + xlab('document number (starting at end of initialization)') + ggtitle(paste(dataset.name, stat.name)) #+ ylim(0,1)
+            qplot(idx, mean, data=data, group=experiment) + geom_smooth(aes(fill=experiment, ymin=lcl, ymax=ucl, color=experiment), data=data, stat="identity") + ylab(paste(stat.name, '(mean +/- stdev)')) + xlab('document number (starting at end of initialization)') + ggtitle(paste(dataset.name, stat.name)) #+ ylim(0,1)
             ggsave(filename.out)
         }
     }
