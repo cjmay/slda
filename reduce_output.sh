@@ -16,7 +16,10 @@ preserve_dir=".preserve"
 
 mkdir "$preserve_dir"
 #gzip results/results.txt
-mv results/results.txt.gz "$preserve_dir/"
+if [ -f results/results.txt.gz ]
+then
+    mv results/results.txt.gz "$preserve_dir/"
+fi
 git rev-parse HEAD > "$preserve_dir/HEAD"
 for f in "$log_stem"*
 do
