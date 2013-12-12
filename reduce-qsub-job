@@ -1,0 +1,10 @@
+#!/bin/sh
+#$ -cwd
+#$ -j y
+#$ -V
+#$ -l num_proc=1,h_rt=24:00:00
+#$ -N "slda-reduce"
+for d in ~/output/2{1,2,3,4,5}*
+do
+    bash reduce_experiment_output.sh "$d"
+done
