@@ -212,6 +212,16 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
       wordCounts(word) = 1
 }
 
+object GigawordReader {
+	val DATA_DIR = "/export/common/data/corpora/LDC/LDC2012T21/data/xml"
+
+  def main(args: Array[String]): Unit = {
+    val reader = new GigawordReader(DATA_DIR, """nyt_eng_.*""".r)
+    for (n <- reader.numDocs)
+      println(n)
+  }
+}
+
 class RegexFilter(regex: Regex) extends FilenameFilter {
   override def accept(dir: File, name: String): Boolean =
     regex.findFirstIn(name) match {
