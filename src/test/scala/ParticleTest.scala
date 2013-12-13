@@ -52,7 +52,7 @@ class ParticleTests extends FunSuite {
     pflda.ingestDocs(Array("foo bar", "baz bat"))
     //pflda.printTopics()
     pflda.particles.particles.map { p => println(p.docLabels) }
-    pflda.writeTopics("results.txt")
+    pflda.printTopics
   }
 
   /*
@@ -268,7 +268,7 @@ class PfLdaTests extends FunSuite {
 
     //pflda.printParticles
     //pflda.printTopics
-    pflda.writeTopics("results.txt")
+    pflda.printTopics
 
     val mis = Evaluation.nmi(pflda, Array("nature", "nature", "nature",
                                           "nature", "nature", "nature",
@@ -290,7 +290,7 @@ class PfLdaTests extends FunSuite {
       map(i) = pflda.ingestDoc(corpus(i)._2)
     }
 
-    pflda.writeTopics("results_tiny-reservoir.txt")
+    pflda.printTopics
 
     val mis = Evaluation.nmi(pflda, Array("nature", "nature", "nature",
                                           "nature", "nature", "nature",

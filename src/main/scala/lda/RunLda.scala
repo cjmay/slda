@@ -145,6 +145,6 @@ object RunLda {
       model.ingestDoc(corpus(i), evaluator)
     }
     model.evaluate(evaluator)
-    model.writeTopics("results.txt")
+    model.printTopics
   }
 }
