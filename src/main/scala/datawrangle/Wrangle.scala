@@ -116,49 +116,14 @@ object Text {
 
 object DataConsts {
   val DATA_DIR = "data/"
-  val TNG_TRAIN_DIR = DATA_DIR + "20news-bydate-train/"
-  val TNG_TEST_DIR = DATA_DIR + "20news-bydate-test/"
-  val TNG_WHITELIST = DATA_DIR + "TNG_WHITELIST"
-  val TNG_STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
-}
+  val WHITELIST = DATA_DIR + "TNG_WHITELIST"
+  val STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
 
-/** Wrangles the 20 Newsgroups dataset
- */
-object TNG {
-  private def loadCategories(categories: List[String]):
-  (Array[String], Array[String], Array[String], Array[String], List[String]) = {
-    val docCatPairs = categories.map({category =>
-      Io.rawCorpus(wrangle.DataConsts.TNG_TRAIN_DIR + category).map({doc =>
-        (doc, category)
-      })
-    }).toArray.flatten
-    val testDocCatPairs = categories.map({category =>
-      Io.rawCorpus(wrangle.DataConsts.TNG_TEST_DIR + category).map({doc =>
-        (doc, category)
-      })
-    }).toArray.flatten
-
-    (docCatPairs.map(p => p._1), docCatPairs.map(p => p._2),
-      testDocCatPairs.map(p => p._1), testDocCatPairs.map(p => p._2),
-      categories)
-  }
-
-  def sim3 =
-    loadCategories(
-      List("comp.graphics", "comp.os.ms-windows.misc", "comp.windows.x"))
-
-  def rel3 =
-    loadCategories(
-      List("talk.politics.misc", "talk.politics.guns", "talk.politics.mideast"))
-
-  def diff3 =
-    loadCategories(
-      List("alt.atheism", "rec.sport.baseball", "sci.space"))
 }
 
 class GigawordReader(dirname: String, filenameRegex: Regex) {
   val OOV = "_OOV_"
-  val blacklist = Text.stopWords(DataConsts.TNG_STOP_WORDS)
+  val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
   val prefs = new AgigaPrefs()
   prefs.setAll(false)
   prefs.setWord(true)

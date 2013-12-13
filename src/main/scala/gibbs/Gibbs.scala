@@ -47,7 +47,7 @@ import wrangle._
 abstract class Gibbs (val docs: Array[String], val T: Int,
                       val alpha: Double, val beta: Double) {
   val D = docs.length
-  val whitelist = Text.stopWords(DataConsts.TNG_WHITELIST)
+  val whitelist = Text.stopWords(DataConsts.WHITELIST)
   val (w, d) = Text.bow(docs, (str: String) => whitelist(str))
   val N = w.length
   var z = Array.fill(N)(Stats.sampleInt(T))
