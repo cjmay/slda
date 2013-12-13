@@ -126,7 +126,7 @@ def parse_log(log_filename):
                 num_words.append(int(val))
             elif key in PER_DOC_STAT_NAMES:
                 per_doc_stats[normalize_stat_name(key)].append(val)
-            elif line == 'WRITE TOPICS':
+            elif line == 'PRINT TOPICS':
                 break
 
     return LogData(num_words, per_doc_stats)

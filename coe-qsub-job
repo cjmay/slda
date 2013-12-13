@@ -11,4 +11,3 @@ export PATH="/export/apps/sbt-0.12.1/bin:$PATH"
 export PATH="/export/apps/scala-2.9.2/bin:$PATH"
 #sbt-0.12.1/bin/sbt -J-Xmx6G -J-Xms6G -J-XX:+UseSerialGC run
 scala -J-Xmx6G -J-Xms6G -J-XX:+UseSerialGC -classpath target/scala-2.9.2/slda_2.9.2-1.0.0.jar lda.RunLda
-gzip results/results.txt

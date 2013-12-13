@@ -93,30 +93,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     }
   }
 
-  def writeTopics(filename: String): Unit = {
-    Io.makeDirIfNE(DataConsts.RESULTS_DIR)
-    println("WRITE TOPICS")
-    val particleObjs = particles.particles
-    val pw = new PrintWriter(DataConsts.RESULTS_DIR + filename)
-
-    for (p <- 0 to particleObjs.length-1) {
-      pw.write("PARTICLE " + p + "\n")
-      val countVctr = particleObjs(p).globalVect
-      for (t <- 0 to T-1) {
-        val percs: Array[(Double,String)] = vocab.toArray.map({ w =>
-          // grab each word, compute how much it comprises a given topic
-          val prctg = countVctr.numTimesWordAssignedTopic(w, t).toDouble /
-            countVctr.numTimesTopicAssignedTotal(t)
-          (prctg, w)
-        })
-        pw.write("topic " + t + "\n")
-        pw.write("\t" + percs.sorted.reverse.deep.mkString("\n\t") + "\n")
-      }
-      pw.write("\n")
-    }
-    pw.close()
-  }
-
   def printTopics: Unit = {
     val particleObjs = particles.particles
 

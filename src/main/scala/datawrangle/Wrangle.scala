@@ -115,7 +115,6 @@ object Text {
 }
 
 object DataConsts {
-  val RESULTS_DIR = "results/"
   val DATA_DIR = "data/"
   val TNG_TRAIN_DIR = DATA_DIR + "20news-bydate-train/"
   val TNG_TEST_DIR = DATA_DIR + "20news-bydate-test/"

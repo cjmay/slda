@@ -101,6 +101,6 @@ object RunLda {
       i += 1
     }
     model.evaluate(evaluator)
-    model.writeTopics("results.txt")
+    model.printTopics
   }
 }
