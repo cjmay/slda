@@ -145,7 +145,7 @@ class GigawordWrangler(trainFrac: Double) {
     val src = GigawordReader.gzippedSource(files(i))
     val train = new ArrayBuffer[Boolean]()
     for (line <- src.getLines()) {
-      if (sampler.sampleBernoulli(trainFrac)) {
+      if (Stats.sampleBernoulli(trainFrac)) {
         train += true
         val tokens = line.split(Text.WHITESPACE)
         for (token <- tokens)
@@ -169,6 +169,43 @@ class GigawordWrangler(trainFrac: Double) {
       wordCounts(word) = 1
 }
 */
+
+object GigawordDatasetSplitter {
+  def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
+    outputDir.mkdirs()
+    GigawordReader.gzippedWriter(new File(outputDir, inputFile.getName))
+  }
+
+  def sortedFiles(files: Array[File]): Array[File] =
+    files.sortBy(f => f.getName)
+
+  def main(args: Array[String]): Unit = {
+    val trainFrac = args(0).toDouble
+    val inputDirname = args(1)
+    val outputDirname = args(1)
+    val trainDir = new File(outputDirname, "train")
+    val testDir = new File(outputDirname, "test")
+
+    val files =
+      sortedFiles(GigawordReader.getMatchingFiles(inputDirname, """.*\.gz""".r))
+    var docIdx = 0
+    for (file <- files) {
+      val trainWriter = makeWriter(trainDir, file)
+      val testWriter = makeWriter(testDir, file)
+
+      val src = GigawordReader.gzippedSource(file)
+      for (line <- src.getLines()) {
+        val train = Stats.sampleBernoulli(trainFrac)
+        val writer = if (train) trainWriter else testWriter
+        writer.write(docIdx.toString + " " + line + "\n")
+        docIdx += 1
+      }
+
+      trainWriter.close
+      testWriter.close
+    }
+  }
+}
 
 object GigawordReader {
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
