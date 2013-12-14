@@ -1,0 +1,17 @@
+#!/bin/sh
+#$ -cwd
+#$ -j y
+#$ -V
+#$ -l num_proc=1,mem_free=6G,h_rt=6:00:00
+#$ -N "slda-giga-reader"
+export JAVA_HOME="/export/apps/java/bin/java"
+export PATH="/export/apps/sbt-0.12.1/bin:$PATH"
+export PATH="/export/apps/scala-2.9.2/bin:$PATH"
+scala \
+    -J-Xmx4G \
+    -J-Xms4G \
+    -J-XX:+UseSerialGC \
+    -classpath 'lib/*:target/scala-2.9.2/slda_2.9.2-1.0.0.jar' \
+    wrangle.GigawordReader \
+    /export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng \
+    $HOME/slda/data/gigaword/nyt_eng

@@ -14,6 +14,7 @@ import scala.xml.pull.EvElemEnd
 import scala.xml.pull.EvText
 import scala.annotation.tailrec
 import java.io.File
+import java.io.FileWriter
 import java.io.FilenameFilter
 import java.io.FileInputStream
 import java.io.BufferedInputStream
@@ -164,10 +165,8 @@ class GigawordReader
 */
 
 object GigawordReader {
-  val DATA_DIR = "/export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng"
-
-  def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[String] = 
-    new File(dirname).listFiles(new RegexFilter(filenameRegex)).map(_.getPath)
+  def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
+    new File(dirname).listFiles(new RegexFilter(filenameRegex))
 
   def gzippedSource(filename: String): Source =
     Source.fromInputStream(
@@ -177,9 +176,10 @@ object GigawordReader {
 
   def main(args: Array[String]): Unit = {
     val tokenizer = new GigawordTokenizer()
-    for (filename <- getMatchingFiles(DATA_DIR, """.*""".r)) {
-      println(filename)
-      val src = gzippedSource(filename)
+    val inputDirname = args(0)
+    val outputDirname = args(1)
+    for (file <- getMatchingFiles(inputDirname, """.*\.gz""".r)) {
+      val src = gzippedSource(file.getPath)
 			val xmlEventReader = new XMLEventReader(src)
 			var inText = false
 			val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
@@ -199,9 +199,16 @@ object GigawordReader {
 					case _ => {}
 				}
 			}
-      for (tokens <- docTokens.map(_.toArray).toArray)
-        print(tokens.length + " ")
-      println
+
+      val outputBasename = file.getName.dropRight(3) + ".txt"
+      val outputDir = new File(outputDirname)
+      outputDir.mkdirs
+      val outputFile = new File(outputDir, outputBasename)
+      val writer = new FileWriter(outputFile)
+      // TODO train/test
+      for (tokens <- docTokens)
+        writer.write(tokens.mkString(" ") + "\n")
+      writer.close
     }
   }
 }
