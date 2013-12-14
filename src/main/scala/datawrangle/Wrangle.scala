@@ -127,36 +127,64 @@ object Text {
 }
 
 object DataConsts {
-  val DATA_DIR = "data/"
-  val WHITELIST = DATA_DIR + "TNG_WHITELIST"
-  val STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
-
+  val WHITELIST = "data/TNG_WHITELIST"
+  val STOP_WORDS = "data/TNG_STOP_WORDS"
+  val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng"
+  val GIGAWORD_FILE_REGEX = """.*\.gz""".r
+  val OOV = "_OOV_"
 }
 
-/*
-class GigawordReader
-  val OOV = "_OOV_"
+class GigawordWrangler {
+  val trainDir = new File(DataConsts.GIGAWORD_DATA_DIR, "train").getPath
+  val trainFiles = GigawordReader.getMatchingFiles(
+    trainDir, DataConsts.GIGAWORD_FILE_REGEX)
+
+  val testDir = new File(DataConsts.GIGAWORD_DATA_DIR, "test").getPath
+  val testFiles = GigawordReader.getMatchingFiles(
+    testDir, DataConsts.GIGAWORD_FILE_REGEX)
+
   val wordCounts = new HashMap[String,Int]()
-  var numDocs = Array.fill(files.length)(0)
-  for (i <- 0 until files.length) {
-    val file = files(i)
-    System.err.println(file.getPath())
-    val reader = new StreamingDocumentReader(file.getPath(), prefs)
-    while (reader.hasNext) {
-      System.err.print(".")
-      val sentenceIterator = reader.next.getSents.iterator
-      while (sentenceIterator.hasNext) {
-        val tokenIterator = sentenceIterator.next.getTokens.iterator
-        while (tokenIterator.hasNext) {
-          val word = tokenIterator.next.getWord
-          if (simpleFilter(word)) updateWordCounts(word)
-        }
-      }
+
+  for (file <- trainFiles) {
+    val src = GigawordReader.gzippedSource(file)
+    for (line <- src.getLines()) {
+      val doc = line.split(Text.WHITESPACE)
+      val docIdx = doc(0).toInt
+      val tokens = doc.drop(1)
+      for (token <- tokens)
+        updateWordCounts(token)
     }
-    System.err.println
-    numDocs(i) = reader.getNumDocs
   }
-  val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
+
+  val vocab = Set(DataConsts.OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
+
+  def replaceOOV(token: String): String =
+    if (vocab.contains(token)) token else DataConsts.OOV
+
+  def fileDocs(file: File): Iterator[(Int,Array[String])] =
+    for (line <- GigawordReader.gzippedSource(file).getLines())
+      yield {
+        val doc = line.split(Text.WHITESPACE)
+        val docIdx = doc(0).toInt
+        val tokens = doc.drop(1)
+        (docIdx, tokens.map(replaceOOV))
+      }
+
+  def trainDocs: Iterator[(Int,Array[String])] =
+    for (file <- trainFiles.toIterator; doc <- fileDocs(file))
+      yield doc
+
+  def testDocs: Iterator[(Int,Array[String])] =
+    for (file <- testFiles.toIterator; doc <- fileDocs(file))
+      yield doc
+
+  def testDocs(indexBound: Int): Iterator[(Int,Array[String])] =
+    for (file <- testFiles.toIterator;
+        doc <- fileDocs(file).filter(p => p._1 < indexBound))
+      yield doc
+
+  // TODO delta docs before current
+  // TODO delta docs after current
 
   def getVocab: Set[String] = vocab
 
@@ -166,7 +194,43 @@ class GigawordReader
     else
       wordCounts(word) = 1
 }
-*/
+
+object GigawordDatasetSplitter {
+  def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
+    outputDir.mkdirs()
+    GigawordReader.gzippedWriter(new File(outputDir, inputFile.getName))
+  }
+
+  def sortedFiles(files: Array[File]): Array[File] =
+    files.sortBy(f => f.getName)
+
+  def main(args: Array[String]): Unit = {
+    val trainFrac = args(0).toDouble
+    val inputDirname = args(1)
+    val outputDirname = args(1)
+    val trainDir = new File(outputDirname, "train")
+    val testDir = new File(outputDirname, "test")
+
+    val files =
+      sortedFiles(GigawordReader.getMatchingFiles(inputDirname, """.*\.gz""".r))
+    var docIdx = 0
+    for (file <- files) {
+      val trainWriter = makeWriter(trainDir, file)
+      val testWriter = makeWriter(testDir, file)
+
+      val src = GigawordReader.gzippedSource(file)
+      for (line <- src.getLines()) {
+        val train = Stats.sampleBernoulli(trainFrac)
+        val writer = if (train) trainWriter else testWriter
+        writer.write(docIdx.toString + " " + line + "\n")
+        docIdx += 1
+      }
+
+      trainWriter.close
+      testWriter.close
+    }
+  }
+}
 
 object GigawordReader {
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
@@ -199,8 +263,6 @@ object GigawordReader {
       outputDir.mkdirs
       val outputFile = new File(outputDir, file.getName)
       val writer = gzippedWriter(outputFile)
-
-      // TODO train/test
 
 			while (xmlEventReader.hasNext) {
 				xmlEventReader.next match {
