@@ -193,31 +193,34 @@ object GigawordReader {
       val src = gzippedSource(file)
 			val xmlEventReader = new XMLEventReader(src)
 			var inText = false
-			val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
-			while (xmlEventReader.hasNext) {
-				xmlEventReader.next match {
-					case EvElemStart(_, label, _, _) =>
-						if (label.toLowerCase == "doc")
-							docTokens.append(new ArrayBuffer[String]())
-						else if (label.toLowerCase == "p")
-							inText = true
-					case EvElemEnd(_, label) =>
-						if (label.toLowerCase == "p")
-							inText = false
-					case EvText(text) =>
-						if (inText)
-							docTokens.last ++= tokenizer.tokenize(text)
-					case _ => {}
-				}
-			}
+			val tokens = new ArrayBuffer[String]()
 
       val outputDir = new File(outputDirname)
       outputDir.mkdirs
       val outputFile = new File(outputDir, file.getName)
       val writer = gzippedWriter(outputFile)
+
       // TODO train/test
-      for (tokens <- docTokens)
-        writer.write(tokens.mkString(" ") + "\n")
+
+			while (xmlEventReader.hasNext) {
+				xmlEventReader.next match {
+					case EvElemStart(_, label, _, _) =>
+						if (label.toLowerCase == "doc")
+							tokens.clear()
+						else if (label.toLowerCase == "p")
+							inText = true
+					case EvElemEnd(_, label) =>
+						if (label.toLowerCase == "doc")
+              writer.write(tokens.mkString(" ") + "\n")
+						else if (label.toLowerCase == "p")
+							inText = false
+					case EvText(text) =>
+						if (inText)
+							tokens ++= tokenizer.tokenize(text)
+					case _ => {}
+				}
+			}
+
       writer.close
     }
   }
