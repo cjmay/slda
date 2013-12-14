@@ -134,14 +134,15 @@ object DataConsts {
   val OOV = "_OOV_"
 }
 
+/*
 class GigawordWrangler(trainFrac: Double) {
   val files = GigawordReader.getMatchingFiles(
-    DataConsts.GIGAWORD_DIR, DataConsts.GIGAWORD_FILE_REGEX)
+    DataConsts.GIGAWORD_DATA_DIR, DataConsts.GIGAWORD_FILE_REGEX)
   val wordCounts = new HashMap[String,Int]()
   val trainDocs: Array[Array[Boolean]] = Array.fill(files.length)(null)
 
   for (i <- 0 until files.length) {
-    val src = gzippedSource(files(i))
+    val src = GigawordReader.gzippedSource(files(i))
     val train = new ArrayBuffer[Boolean]()
     for (line <- src.getLines()) {
       if (sampler.sampleBernoulli(trainFrac)) {
@@ -157,7 +158,7 @@ class GigawordWrangler(trainFrac: Double) {
   }
 
   val numDocs = trainDocs.map(_.length).sum
-  val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
+  val vocab = Set(DataConsts.OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
 
   def getVocab: Set[String] = vocab
 
@@ -167,6 +168,7 @@ class GigawordWrangler(trainFrac: Double) {
     else
       wordCounts(word) = 1
 }
+*/
 
 object GigawordReader {
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
