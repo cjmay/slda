@@ -227,10 +227,13 @@ class GigawordTokenizer {
   val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
   val badness = """\W""".r
 
-  /** Return true iff string is nonempty and not in blacklist */
-  def simpleFilter(str: String): Boolean = {
-    (badness.findAllIn(str).size == 0) && !blacklist(str.toLowerCase)
-  }
+  /** Return true iff string is nonempty, contains no punctuation, and is
+    * not in blacklist
+    */
+  def simpleFilter(str: String): Boolean =
+    !str.isEmpty &&
+      !blacklist(str) &&
+      badness.findAllIn(str).size == 0
 
   def tokenize(s: String): Array[String] =
     s.toLowerCase().split(Text.WHITESPACE).filter(simpleFilter)
