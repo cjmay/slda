@@ -8,19 +8,16 @@ import scala.collection.Iterator
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
-import scala.xml.{Source => XMLSource}
+import scala.xml.pull.XMLEventReader
+import scala.xml.pull.EvElemStart
+import scala.xml.pull.EvElemEnd
+import scala.xml.pull.EvText
 import scala.annotation.tailrec
 import java.io.File
 import java.io.FilenameFilter
 import java.io.FileInputStream
 import java.io.BufferedInputStream
 import java.util.zip.GZIPInputStream
-import org.xml.sax.InputSource
-import org.xml.sax.Attributes
-import org.xml.sax.SAXException
-import org.xml.sax.helpers.DefaultHandler
-import javax.xml.parsers.SAXParser
-import javax.xml.parsers.SAXParserFactory
 import lda.Stats
 
 import edu.jhu.agiga.AgigaPrefs
@@ -138,10 +135,10 @@ class GigawordReader
   var numDocs = Array.fill(files.length)(0)
   for (i <- 0 until files.length) {
     val file = files(i)
-		System.err.println(file.getPath())
+    System.err.println(file.getPath())
     val reader = new StreamingDocumentReader(file.getPath(), prefs)
     while (reader.hasNext) {
-			System.err.print(".")
+      System.err.print(".")
       val sentenceIterator = reader.next.getSents.iterator
       while (sentenceIterator.hasNext) {
         val tokenIterator = sentenceIterator.next.getTokens.iterator
@@ -151,7 +148,7 @@ class GigawordReader
         }
       }
     }
-		System.err.println
+    System.err.println
     numDocs(i) = reader.getNumDocs
   }
   val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
@@ -167,27 +164,42 @@ class GigawordReader
 */
 
 object GigawordReader {
-	val DATA_DIR = "/export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng"
+  val DATA_DIR = "/export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng"
 
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[String] = 
     new File(dirname).listFiles(new RegexFilter(filenameRegex)).map(_.getPath)
 
-  def gzippedInputSource(filename: String): InputSource =
-    XMLSource.fromInputStream(
-      new GZIPInputStream(
-        new BufferedInputStream(
-          new FileInputStream(filename))))
+  def gzippedSource(filename: String): Source =
+    Source.fromInputStream(
+			new GZIPInputStream(
+				new BufferedInputStream(
+					new FileInputStream(filename))))
 
   def main(args: Array[String]): Unit = {
-		val tokenizer = new GigawordTokenizer()
+    val tokenizer = new GigawordTokenizer()
     for (filename <- getMatchingFiles(DATA_DIR, """.*""".r)) {
       println(filename)
-      val src = gzippedInputSource(filename)
-      val saxParserFactory = SAXParserFactory.newInstance()
-      val saxParser = saxParserFactory.newSAXParser()
-      val handler = new GigawordXMLHandler(tokenizer)
-      saxParser.parse(src, handler)
-      for (tokens <- handler.getDocTokens)
+      val src = gzippedSource(filename)
+			val xmlEventReader = new XMLEventReader(src)
+			var inText = false
+			val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
+			while (xmlEventReader.hasNext) {
+				xmlEventReader.next match {
+					case EvElemStart(_, label, _, _) =>
+						if (label.toLowerCase == "doc")
+							docTokens.append(new ArrayBuffer[String]())
+						else if (label.toLowerCase == "p")
+							inText = true
+					case EvElemEnd(_, label) =>
+						if (label.toLowerCase == "p")
+							inText = false
+					case EvText(text) =>
+						if (inText)
+							docTokens.last ++= tokenizer.tokenize(text)
+					case _ => {}
+				}
+			}
+      for (tokens <- docTokens.map(_.toArray).toArray)
         print(tokens.length + " ")
       println
     }
@@ -205,34 +217,6 @@ class GigawordTokenizer {
 
   def tokenize(s: String): Array[String] =
     s.toLowerCase().split(Text.WHITESPACE).filter(simpleFilter)
-}
-
-class GigawordXMLHandler(tokenizer: GigawordTokenizer) extends DefaultHandler {
-  var inText = false
-  val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
-
-  override def startElement(uri: String, localName: String, qName: String,
-      attributes: Attributes): Unit = {
-    if (qName.toLowerCase == "text") {
-      inText = true
-      docTokens.append(new ArrayBuffer[String]())
-    }
-  }
-
-  override def endElement(uri: String, localName: String, qName: String):
-  Unit = {
-    if (qName.toLowerCase == "text")
-      inText = false
-  }
-
-  override def characters(ch: Array[Char], start: Int, length: Int):
-  Unit = {
-    if (inText)
-      docTokens.last ++= tokenizer.tokenize(ch.mkString)
-  }
-
-  def getDocTokens: Array[Array[String]] =
-    docTokens.map(_.toArray).toArray
 }
 
 class RegexFilter(regex: Regex) extends FilenameFilter {
