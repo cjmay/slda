@@ -179,12 +179,13 @@ object GigawordReader {
           new FileInputStream(filename))))
 
   def main(args: Array[String]): Unit = {
-    for (filename <- getMatchingFiles(DATA_DIR, ".*")) {
+		val tokenizer = new GigawordTokenizer()
+    for (filename <- getMatchingFiles(DATA_DIR, """.*""".r)) {
       println(filename)
       val src = gzippedInputSource(filename)
       val saxParserFactory = SAXParserFactory.newInstance()
-      val saxParser = factory.newSAXParser()
-      val handler = new GigawordXMLHandler()
+      val saxParser = saxParserFactory.newSAXParser()
+      val handler = new GigawordXMLHandler(tokenizer)
       saxParser.parse(src, handler)
       for (tokens <- handler.getDocTokens)
         print(tokens.length + " ")
@@ -224,10 +225,10 @@ class GigawordXMLHandler(tokenizer: GigawordTokenizer) extends DefaultHandler {
       inText = false
   }
 
-  override def characters(ch: Array[Character], start: Int, length: Int):
+  override def characters(ch: Array[Char], start: Int, length: Int):
   Unit = {
     if (inText)
-      docTokens ++= tokenizer.tokenize(new String(ch))
+      docTokens.last ++= tokenizer.tokenize(ch.mkString)
   }
 
   def getDocTokens: Array[Array[String]] =
