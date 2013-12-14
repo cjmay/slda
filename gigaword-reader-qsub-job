@@ -13,6 +13,5 @@ scala \
     -J-XX:+UseSerialGC \
     -classpath 'lib/*:target/scala-2.9.2/slda_2.9.2-1.0.0.jar' \
     wrangle.GigawordReader \
-    0.8 \
     /export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng \
     $HOME/slda/data/gigaword/nyt_eng

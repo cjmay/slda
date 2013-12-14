@@ -185,50 +185,24 @@ object GigawordReader {
           new FileOutputStream(file)),
         "UTF-8"))
 
-  def computeNumDocs(file: File): Int = {
-    val src = gzippedSource(file)
-    val xmlEventReader = new XMLEventReader(src)
-    var numDocs = 0
-    while (xmlEventReader.hasNext)
-      xmlEventReader.next match {
-        case EvElemEnd(_, label) =>
-          if (label.toLowerCase == "doc")
-            numDocs += 1
-        case _ => {}
-      }
-    numDocs
-  }
-
-  def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
-    outputDir.mkdirs
-    val outputFile = new File(outputDir, inputFile.getName)
-    gzippedWriter(outputFile)
-  }
-
-  def selectWriter(trainWriter: BufferedWriter, testWriter: BufferedWriter,
-      numTrainDocs: Int, docIdx: Int): BufferedWriter =
-    if (docIdx >= numTrainDocs) trainWriter else testWriter
-
   def main(args: Array[String]): Unit = {
     val tokenizer = new GigawordTokenizer()
-    val trainFrac = args(0).toDouble
-    val inputDirname = args(1)
-    val outputDirname = args(2)
-
+    val inputDirname = args(0)
+    val outputDirname = args(1)
     for (file <- getMatchingFiles(inputDirname, """.*\.gz""".r)) {
-      val numDocs = computeNumDocs(file)
-      val numTrainDocs = (trainFrac * numDocs).toInt
-
       val src = gzippedSource(file)
 			val xmlEventReader = new XMLEventReader(src)
 			var inText = false
 			val tokens = new ArrayBuffer[String]()
 
-      val trainWriter = makeWriter(new File(outputDirname, "train"), file)
-      val testWriter = makeWriter(new File(outputDirname, "test"), file)
+      val outputDir = new File(outputDirname)
+      outputDir.mkdirs
+      val outputFile = new File(outputDir, file.getName)
+      val writer = gzippedWriter(outputFile)
 
-      var docIdx = 0
-			while (xmlEventReader.hasNext)
+      // TODO train/test
+
+			while (xmlEventReader.hasNext) {
 				xmlEventReader.next match {
 					case EvElemStart(_, label, _, _) =>
 						if (label.toLowerCase == "doc")
@@ -236,22 +210,18 @@ object GigawordReader {
 						else if (label.toLowerCase == "p")
 							inText = true
 					case EvElemEnd(_, label) =>
-						if (label.toLowerCase == "doc") {
-              val writer =
-                selectWriter(trainWriter, testWriter, numTrainDocs, docIdx)
+						if (label.toLowerCase == "doc")
               writer.write(tokens.mkString(" ") + "\n")
-              docIdx += 1
-            } else if (label.toLowerCase == "p") {
+						else if (label.toLowerCase == "p")
 							inText = false
-            }
 					case EvText(text) =>
 						if (inText)
 							tokens ++= tokenizer.tokenize(text)
 					case _ => {}
 				}
+			}
 
-      trainWriter.close
-      testWriter.close
+      writer.close
     }
   }
 }
