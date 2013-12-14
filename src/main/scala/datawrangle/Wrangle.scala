@@ -228,18 +228,18 @@ object GigawordReader {
 
 class GigawordTokenizer {
   val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
-  val badness = """\W""".r
+  val badness = """\W|_""".r
 
-  /** Return true iff string is nonempty, contains no punctuation, and is
-    * not in blacklist
-    */
+  /** Return true iff string is nonempty and is not in blacklist */
   def simpleFilter(str: String): Boolean =
-    !str.isEmpty &&
-      !blacklist(str) &&
-      badness.findAllIn(str).size == 0
+    !str.isEmpty && !blacklist(str)
+
+  /** Return lower-cased, punctuation-stripped string */
+  def normalize(str: String): String =
+    badness.replaceAllIn(str, "").toLowerCase
 
   def tokenize(s: String): Array[String] =
-    s.toLowerCase().split(Text.WHITESPACE).filter(simpleFilter)
+    s.toLowerCase().split(Text.WHITESPACE).map(normalize).filter(simpleFilter)
 }
 
 class RegexFilter(regex: Regex) extends FilenameFilter {
