@@ -34,6 +34,7 @@ object RunLda {
   private def substituteOOV(word: String, vocab: Set[String]): String =
     if (vocab.contains(word)) word else OOV
 
+/*
   def main (args: Array[String]) {
     val params: RunLdaParams = GigaParams
 
@@ -103,4 +104,5 @@ object RunLda {
     model.evaluate(evaluator)
     model.printTopics
   }
+*/
 }

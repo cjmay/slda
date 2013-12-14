@@ -8,9 +8,19 @@ import scala.collection.Iterator
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
+import scala.xml.{Source => XMLSource}
 import scala.annotation.tailrec
 import java.io.File
 import java.io.FilenameFilter
+import java.io.FileInputStream
+import java.io.BufferedInputStream
+import java.util.zip.GZIPInputStream
+import org.xml.sax.InputSource
+import org.xml.sax.Attributes
+import org.xml.sax.SAXException
+import org.xml.sax.helpers.DefaultHandler
+import javax.xml.parsers.SAXParser
+import javax.xml.parsers.SAXParserFactory
 import lda.Stats
 
 import edu.jhu.agiga.AgigaPrefs
@@ -121,13 +131,9 @@ object DataConsts {
 
 }
 
-class GigawordReader(dirname: String, filenameRegex: Regex) {
+/*
+class GigawordReader
   val OOV = "_OOV_"
-  val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
-  val prefs = new AgigaPrefs()
-  prefs.setAll(false)
-  prefs.setWord(true)
-  val files = new File(dirname).listFiles(new RegexFilter(filenameRegex))
   val wordCounts = new HashMap[String,Int]()
   var numDocs = Array.fill(files.length)(0)
   for (i <- 0 until files.length) {
@@ -141,7 +147,7 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
         val tokenIterator = sentenceIterator.next.getTokens.iterator
         while (tokenIterator.hasNext) {
           val word = tokenIterator.next.getWord
-          if (simpleFilter(word)) updateCounts(word)
+          if (simpleFilter(word)) updateWordCounts(word)
         }
       }
     }
@@ -150,76 +156,82 @@ class GigawordReader(dirname: String, filenameRegex: Regex) {
   }
   val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
 
-  def shuffledDocs: Seq[Array[String]] = {
-    val indices = Stats.shuffle(
-      (0 until numDocs.size).map(
-        i => (0 until numDocs(i)).map(
-          j => (i, j)
-        ).toArray
-      ).flatten)
-    for ((i, j) <- indices)
-      yield {
-        val file = files(i)
-        val reader = new StreamingDocumentReader(file.getPath(), prefs)
-        for (k <- 0 until j) reader.next
-        docToWords(reader.next)
-      }
-  }
-
-  def docs: Seq[Array[String]] =
-    for (i <- 0 until files.size; doc <- readerToDocs(fileToReader(files(i))))
-      yield docToWords(doc)
-
-  def fileToReader(file: File): StreamingDocumentReader =
-    new StreamingDocumentReader(file.getPath(), prefs)
-
-  def readerToDocs(reader: StreamingDocumentReader): Seq[AgigaDocument] =
-    readerToDocsHelper(reader, Seq.empty)
-
-  @tailrec
-  private def readerToDocsHelper(reader: StreamingDocumentReader,
-      seq: Seq[AgigaDocument]): Seq[AgigaDocument] =
-    if (reader.hasNext)
-      readerToDocsHelper(reader, reader.next +: seq)
-    else
-      seq
-
-  def docToWords(doc: AgigaDocument): Array[String] = {
-    val words = new ArrayBuffer[String]()
-    val sentenceIterator = doc.getSents.iterator
-    while (sentenceIterator.hasNext) {
-      val tokenIterator = sentenceIterator.next.getTokens.iterator
-      while (tokenIterator.hasNext) {
-        val word = tokenIterator.next.getWord
-        if (simpleFilter(word)) words += word
-      }
-    }
-    words.toArray
-  }
-
   def getVocab: Set[String] = vocab
 
-  /** Return true iff string is nonempty and not in blacklist */
-  private def simpleFilter(str: String): Boolean = {
-    val patt = new Regex("\\W");
-    (patt.findAllIn(str).size == 0) && !blacklist(str.toLowerCase)
-  }
-
-  private def updateCounts(word: String): Unit =
+  private def updateWordCounts(word: String): Unit =
     if (wordCounts.contains(word))
       wordCounts(word) += 1
     else
       wordCounts(word) = 1
 }
+*/
 
 object GigawordReader {
-	val DATA_DIR = "/export/common/data/corpora/LDC/LDC2012T21/data/xml"
+	val DATA_DIR = "/export/common/data/corpora/LDC/LDC2011T07/data/nyt_eng"
+
+  def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[String] = 
+    new File(dirname).listFiles(new RegexFilter(filenameRegex)).map(_.getPath)
+
+  def gzippedInputSource(filename: String): InputSource =
+    XMLSource.fromInputStream(
+      new GZIPInputStream(
+        new BufferedInputStream(
+          new FileInputStream(filename))))
 
   def main(args: Array[String]): Unit = {
-    val reader = new GigawordReader(DATA_DIR, """nyt_eng_.*""".r)
-    for (n <- reader.numDocs)
-      println(n)
+    for (filename <- getMatchingFiles(DATA_DIR, ".*")) {
+      println(filename)
+      val src = gzippedInputSource(filename)
+      val saxParserFactory = SAXParserFactory.newInstance()
+      val saxParser = factory.newSAXParser()
+      val handler = new GigawordXMLHandler()
+      saxParser.parse(src, handler)
+      for (tokens <- handler.getDocTokens)
+        print(tokens.length + " ")
+      println
+    }
   }
+}
+
+class GigawordTokenizer {
+  val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
+  val badness = """\W""".r
+
+  /** Return true iff string is nonempty and not in blacklist */
+  def simpleFilter(str: String): Boolean = {
+    (badness.findAllIn(str).size == 0) && !blacklist(str.toLowerCase)
+  }
+
+  def tokenize(s: String): Array[String] =
+    s.toLowerCase().split(Text.WHITESPACE).filter(simpleFilter)
+}
+
+class GigawordXMLHandler(tokenizer: GigawordTokenizer) extends DefaultHandler {
+  var inText = false
+  val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
+
+  override def startElement(uri: String, localName: String, qName: String,
+      attributes: Attributes): Unit = {
+    if (qName.toLowerCase == "text") {
+      inText = true
+      docTokens.append(new ArrayBuffer[String]())
+    }
+  }
+
+  override def endElement(uri: String, localName: String, qName: String):
+  Unit = {
+    if (qName.toLowerCase == "text")
+      inText = false
+  }
+
+  override def characters(ch: Array[Character], start: Int, length: Int):
+  Unit = {
+    if (inText)
+      docTokens ++= tokenizer.tokenize(new String(ch))
+  }
+
+  def getDocTokens: Array[Array[String]] =
+    docTokens.map(_.toArray).toArray
 }
 
 class RegexFilter(regex: Regex) extends FilenameFilter {
