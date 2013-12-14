@@ -16,6 +16,9 @@ object Stats {
     sampler = new Random(seed)
   }
 
+  def sampleBernoulli(oneWeight: Double): Boolean =
+    sampler.nextDouble > oneWeight
+
   def sampleWithoutReplacement[T:Manifest](a: Array[T], k: Int): Array[T] = {
     val sample = new ReservoirSampler[T](k)
     sample.addAll(a)

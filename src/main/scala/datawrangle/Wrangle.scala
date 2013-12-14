@@ -127,35 +127,36 @@ object Text {
 }
 
 object DataConsts {
-  val DATA_DIR = "data/"
-  val WHITELIST = DATA_DIR + "TNG_WHITELIST"
-  val STOP_WORDS = DATA_DIR + "TNG_STOP_WORDS"
-
+  val WHITELIST = "data/TNG_WHITELIST"
+  val STOP_WORDS = "data/TNG_STOP_WORDS"
+  val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng"
+  val GIGAWORD_FILE_REGEX = """.*\.gz"""
+  val OOV = "_OOV_"
 }
 
-/*
-class GigawordReader
-  val OOV = "_OOV_"
+class GigawordWrangler(trainFrac: Double) {
+  val files = GigawordReader.getMatchingFiles(
+    DataConsts.GIGAWORD_DIR, DataConsts.GIGAWORD_FILE_REGEX)
   val wordCounts = new HashMap[String,Int]()
-  var numDocs = Array.fill(files.length)(0)
+  val trainDocs: Array[Array[Boolean]] = Array.fill(files.length)(null)
+
   for (i <- 0 until files.length) {
-    val file = files(i)
-    System.err.println(file.getPath())
-    val reader = new StreamingDocumentReader(file.getPath(), prefs)
-    while (reader.hasNext) {
-      System.err.print(".")
-      val sentenceIterator = reader.next.getSents.iterator
-      while (sentenceIterator.hasNext) {
-        val tokenIterator = sentenceIterator.next.getTokens.iterator
-        while (tokenIterator.hasNext) {
-          val word = tokenIterator.next.getWord
-          if (simpleFilter(word)) updateWordCounts(word)
-        }
+    val src = gzippedSource(files(i))
+    val train = new ArrayBuffer[Boolean]()
+    for (line <- src.getLines()) {
+      if (sampler.sampleBernoulli(trainFrac)) {
+        train += true
+        val tokens = line.split(Text.WHITESPACE)
+        for (token <- tokens)
+          updateWordCounts(token)
+      } else {
+        train += true
       }
     }
-    System.err.println
-    numDocs(i) = reader.getNumDocs
+    trainDocs(i) = train.toArray
   }
+
+  val numDocs = trainDocs.map(_.length).sum
   val vocab = Set(OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
 
   def getVocab: Set[String] = vocab
@@ -166,7 +167,6 @@ class GigawordReader
     else
       wordCounts(word) = 1
 }
-*/
 
 object GigawordReader {
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
@@ -199,8 +199,6 @@ object GigawordReader {
       outputDir.mkdirs
       val outputFile = new File(outputDir, file.getName)
       val writer = gzippedWriter(outputFile)
-
-      // TODO train/test
 
 			while (xmlEventReader.hasNext) {
 				xmlEventReader.next match {
