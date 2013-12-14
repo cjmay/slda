@@ -15,10 +15,14 @@ import scala.xml.pull.EvText
 import scala.annotation.tailrec
 import java.io.File
 import java.io.FileWriter
+import java.io.BufferedWriter
 import java.io.FilenameFilter
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.OutputStreamWriter
 import java.io.BufferedInputStream
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import lda.Stats
 
 import edu.jhu.agiga.AgigaPrefs
@@ -168,18 +172,25 @@ object GigawordReader {
   def getMatchingFiles(dirname: String, filenameRegex: Regex): Array[File] = 
     new File(dirname).listFiles(new RegexFilter(filenameRegex))
 
-  def gzippedSource(filename: String): Source =
+  def gzippedSource(file: File): Source =
     Source.fromInputStream(
 			new GZIPInputStream(
 				new BufferedInputStream(
-					new FileInputStream(filename))))
+					new FileInputStream(file))))
+
+  def gzippedWriter(file: File): BufferedWriter =
+    new BufferedWriter(
+      new OutputStreamWriter(
+        new GZIPOutputStream(
+          new FileOutputStream(file)),
+        "UTF-8"))
 
   def main(args: Array[String]): Unit = {
     val tokenizer = new GigawordTokenizer()
     val inputDirname = args(0)
     val outputDirname = args(1)
     for (file <- getMatchingFiles(inputDirname, """.*\.gz""".r)) {
-      val src = gzippedSource(file.getPath)
+      val src = gzippedSource(file)
 			val xmlEventReader = new XMLEventReader(src)
 			var inText = false
 			val docTokens = new ArrayBuffer[ArrayBuffer[String]]()
@@ -200,11 +211,10 @@ object GigawordReader {
 				}
 			}
 
-      val outputBasename = file.getName.dropRight(3) + ".txt"
       val outputDir = new File(outputDirname)
       outputDir.mkdirs
-      val outputFile = new File(outputDir, outputBasename)
-      val writer = new FileWriter(outputFile)
+      val outputFile = new File(outputDir, file.getName)
+      val writer = gzippedWriter(outputFile)
       // TODO train/test
       for (tokens <- docTokens)
         writer.write(tokens.mkString(" ") + "\n")
