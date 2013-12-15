@@ -653,10 +653,12 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     vocabSize: Int, docs: Iterable[Array[String]]) {
   def perplexity(globalVect: GlobalUpdateVector): (Double, Double) = {
+		println("perplexity...")
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
     for (doc <- docs) {
+			println("* doc...")
       for (wordIdx <- 0 until doc.size) {
         val word = doc(wordIdx)
         val denom = alpha * topics + z.sum
