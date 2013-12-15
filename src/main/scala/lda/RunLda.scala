@@ -21,20 +21,11 @@ abstract class RunLdaParams {
   val seed: Long = 0
   val fixInitialSample: Boolean = true
   val fixInitialModel: Boolean = false
-	val dataDir: String = "/export/common/data/corpora/LDC/LDC2012T21/data/xml"
-  val trainDataRegex: Regex = """nyt_eng_199407\.xml\.gz""".r
-  val testDataRegex: Regex = """nyt_eng_199408\.xml\.gz""".r
 }
 
 object GigaParams extends RunLdaParams { }
 
 object RunLda {
-  val OOV = "_OOV_"
-
-  private def substituteOOV(word: String, vocab: Set[String]): String =
-    if (vocab.contains(word)) word else OOV
-
-/*
   def main (args: Array[String]) {
     val params: RunLdaParams = GigaParams
 
@@ -48,28 +39,20 @@ object RunLda {
       Stats.setSeed(params.seed)
 
     println("loading corpus...")
-    val trainData = new GigawordReader(params.dataDir, params.trainDataRegex)
-    val testData = new GigawordReader(params.dataDir, params.testDataRegex)
+    val data = new GigawordWrangler()
 
-    val trainDocs = trainData.docs
-    
     // If we fixed a random seed for the data shuffle but want a random
     // Gibbs initialization, reinitialize seed randomly
     if (params.fixInitialSample && ! params.fixInitialModel)
       Stats.setDefaultSeed()
 
-    val vocab = trainData.getVocab
+    val vocab = data.getVocab
     println("vocab size " + vocab.size)
 
-    val inferDocsTokens =
-      testData.docs.map(d => d.map(substituteOOV(_, vocab))).toArray
+    val inferDocs = data.testDocsIterable
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
-      params.alpha, params.beta, vocab.size, inferDocsTokens)
+      params.alpha, params.beta, vocab.size, inferDocs)
     val evaluator = new DualEvaluator(inferentialSampler)
-
-    println("testing size " + inferDocsTokens.map(_.size).sum)
-    println("testing num OOV "
-      + inferDocsTokens.map(d => d.filter(_ == OOV).size).sum)
 
     println("initializing model...")
     val model = new PfLda(params.topics, params.alpha, params.beta,
@@ -79,13 +62,9 @@ object RunLda {
                           params.rejuvMcmcSteps)
 
     val initialBatchSize = params.initialBatchSize
-    val initDocs = Array.fill(initialBatchSize)(Array.fill(0)(""))
-    val trainDocsIter = trainDocs.iterator
-    for (i <- 0 until initialBatchSize) {
-      if (! trainDocsIter.hasNext)
-        throw new RuntimeException("initialBatchSize > no. training documents")
-      initDocs(i) = trainDocsIter.next
-    }
+    val trainDocsIter = data.trainDocs
+    val initDocs = Stats.shuffle(
+      (0 until initialBatchSize).map(i => trainDocsIter.next)).toArray
     model.initialize(initDocs, params.initialBatchMcmcSteps)
 
     // If we fixed a random seed earlier and haven't reinitialized it
@@ -104,5 +83,4 @@ object RunLda {
     model.evaluate(evaluator)
     model.printTopics
   }
-*/
 }

@@ -170,18 +170,21 @@ class GigawordWrangler {
         (docIdx, tokens.map(replaceOOV))
       }
 
-  def trainDocs: Iterator[(Int,Array[String])] =
+  def trainDocs: Iterator[Array[String]] =
     for (file <- trainFiles.toIterator; doc <- fileDocs(file))
-      yield doc
+      yield doc._2
 
-  def testDocs: Iterator[(Int,Array[String])] =
+  def testDocs: Iterator[Array[String]] =
     for (file <- testFiles.toIterator; doc <- fileDocs(file))
-      yield doc
+      yield doc._2
 
-  def testDocs(indexBound: Int): Iterator[(Int,Array[String])] =
-    for (file <- testFiles.toIterator;
-        doc <- fileDocs(file).filter(p => p._1 < indexBound))
-      yield doc
+  def testDocsIterable: Iterable[Array[String]] =
+    new Iterable[Array[String]]() {
+      def iterator: Iterator[Array[String]] = 
+        for (file <- testFiles.toIterator; doc <- fileDocs(file))
+          yield doc._2
+    }
+
 
   // TODO delta docs before current
   // TODO delta docs after current
