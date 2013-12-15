@@ -11,10 +11,10 @@ abstract class RunLdaParams {
   val alpha: Double = 0.1
   val beta: Double = 0.1
   val reservoirSize: Int = 10000
-  val numParticles: Int = 20
-  val ess: Double = 4.0
-  val rejuvBatchSize: Int = 30
-  val rejuvMcmcSteps: Int = 20
+  val numParticles: Int = 5
+  val ess: Double = 1.0
+  val rejuvBatchSize: Int = 60
+  val rejuvMcmcSteps: Int = 40
   val initialBatchSize: Int = 100
   val initialBatchMcmcSteps: Int = 150
   val topics: Int = 10
