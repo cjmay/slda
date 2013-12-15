@@ -705,8 +705,7 @@ class DocumentUpdateVector(val topics: Int) {
   /** proper deep copy of DocumentUpdateVector */
   def copy: DocumentUpdateVector = {
     var copiedVect = new DocumentUpdateVector(topics)
-    Array.copy(timesTopicOccursInDoc, 0, copiedVect.timesTopicOccursInDoc, 0,
-               topics)
+    copiedVect.timesTopicOccursInDoc = timesTopicOccursInDoc.clone
     copiedVect.wordsInDoc = wordsInDoc
     copiedVect
   }
@@ -755,10 +754,8 @@ class GlobalUpdateVector(val topics: Int) {
   /** proper deep copy of GlobalUpdateVector */
   def copy: GlobalUpdateVector = {
     val copiedVect = new GlobalUpdateVector(topics)
-    timesWordAssignedTopic.foreach { kv =>
-      copiedVect.timesWordAssignedTopic(kv._1) = kv._2 }
-    Array.copy(timesTopicAssignedTotal, 0, copiedVect.timesTopicAssignedTotal,
-               0, topics)
+    copiedVect.timesWordAssignedTopic = timesWordAssignedTopic.clone
+    copiedVect.timesTopicAssignedTotal = timesTopicAssignedTotal.clone
     copiedVect
   }
 }
