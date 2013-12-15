@@ -49,7 +49,7 @@ object RunLda {
     val vocab = data.getVocab
     println("vocab size " + vocab.size)
 
-    val inferDocs = data.testDocsIterable.toArray
+    val inferDocs = data.testDocsIterable
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
       params.alpha, params.beta, vocab.size, inferDocs)
     val evaluator = new DualEvaluator(inferentialSampler)
