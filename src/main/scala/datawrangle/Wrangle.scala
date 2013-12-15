@@ -129,7 +129,7 @@ object Text {
 object DataConsts {
   val WHITELIST = "data/TNG_WHITELIST"
   val STOP_WORDS = "data/TNG_STOP_WORDS"
-  val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng"
+  val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng.split"
   val GIGAWORD_FILE_REGEX = """.*\.gz""".r
   val OOV = "_OOV_"
 }
