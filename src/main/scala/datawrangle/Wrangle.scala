@@ -210,7 +210,7 @@ object GigawordDatasetSplitter {
   def main(args: Array[String]): Unit = {
     val trainFrac = args(0).toDouble
     val inputDirname = args(1)
-    val outputDirname = args(1)
+    val outputDirname = args(2)
     val trainDir = new File(outputDirname, "train")
     val testDir = new File(outputDirname, "test")
 
