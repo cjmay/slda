@@ -50,7 +50,6 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
     (0 until words.length).foreach { i =>
-			println(i.toString + ": " + words(i))
       processWord(i, words, docIdx, evaluator)
     }
     if (words.length != 0) {
@@ -81,15 +80,11 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     val word = words(i)
     currTokenNum += 1
 
-		println("unnormalizedReweightAll...")
     particles.unnormalizedReweightAll(word)
 
-		println("evaluate...")
     if (i == 0) evaluate(evaluator)
 
-		println("transitionAll...")
     particles.transitionAll(i, words(i), docIdx)
-		println("normalizeWeights...")
     particles.normalizeWeights()
 
     if (particles.shouldResample) {
