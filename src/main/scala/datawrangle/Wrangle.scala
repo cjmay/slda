@@ -136,12 +136,12 @@ object DataConsts {
 
 class GigawordWrangler {
   val trainDir = new File(DataConsts.GIGAWORD_DATA_DIR, "train").getPath
-  val trainFiles = GigawordReader.getMatchingFiles(
-    trainDir, DataConsts.GIGAWORD_FILE_REGEX)
+  val trainFiles = GigawordDatasetSplitter.sortedFiles(
+    GigawordReader.getMatchingFiles(trainDir, DataConsts.GIGAWORD_FILE_REGEX))
 
   val testDir = new File(DataConsts.GIGAWORD_DATA_DIR, "test").getPath
-  val testFiles = GigawordReader.getMatchingFiles(
-    testDir, DataConsts.GIGAWORD_FILE_REGEX)
+  val testFiles = GigawordDatasetSplitter.sortedFiles(
+    GigawordReader.getMatchingFiles(testDir, DataConsts.GIGAWORD_FILE_REGEX))
 
   val wordCounts = new HashMap[String,Int]()
 
