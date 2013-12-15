@@ -146,6 +146,7 @@ class GigawordWrangler {
   val wordCounts = new HashMap[String,Int]()
 
   for (file <- trainFiles) {
+    println("* " + file.getPath)
     val src = GigawordReader.gzippedSource(file)
     for (line <- src.getLines()) {
       val doc = line.split(Text.WHITESPACE)
@@ -241,9 +242,9 @@ object GigawordReader {
 
   def gzippedSource(file: File): Source =
     Source.fromInputStream(
-			new GZIPInputStream(
-				new BufferedInputStream(
-					new FileInputStream(file))))
+      new GZIPInputStream(
+        new BufferedInputStream(
+          new FileInputStream(file))))
 
   def gzippedWriter(file: File): BufferedWriter =
     new BufferedWriter(
@@ -258,33 +259,33 @@ object GigawordReader {
     val outputDirname = args(1)
     for (file <- getMatchingFiles(inputDirname, """.*\.gz""".r)) {
       val src = gzippedSource(file)
-			val xmlEventReader = new XMLEventReader(src)
-			var inText = false
-			val tokens = new ArrayBuffer[String]()
+      val xmlEventReader = new XMLEventReader(src)
+      var inText = false
+      val tokens = new ArrayBuffer[String]()
 
       val outputDir = new File(outputDirname)
       outputDir.mkdirs
       val outputFile = new File(outputDir, file.getName)
       val writer = gzippedWriter(outputFile)
 
-			while (xmlEventReader.hasNext) {
-				xmlEventReader.next match {
-					case EvElemStart(_, label, _, _) =>
-						if (label.toLowerCase == "doc")
-							tokens.clear()
-						else if (label.toLowerCase == "p")
-							inText = true
-					case EvElemEnd(_, label) =>
-						if (label.toLowerCase == "doc")
+      while (xmlEventReader.hasNext) {
+        xmlEventReader.next match {
+          case EvElemStart(_, label, _, _) =>
+            if (label.toLowerCase == "doc")
+              tokens.clear()
+            else if (label.toLowerCase == "p")
+              inText = true
+          case EvElemEnd(_, label) =>
+            if (label.toLowerCase == "doc")
               writer.write(tokens.mkString(" ") + "\n")
-						else if (label.toLowerCase == "p")
-							inText = false
-					case EvText(text) =>
-						if (inText)
-							tokens ++= tokenizer.tokenize(text)
-					case _ => {}
-				}
-			}
+            else if (label.toLowerCase == "p")
+              inText = false
+          case EvText(text) =>
+            if (inText)
+              tokens ++= tokenizer.tokenize(text)
+          case _ => {}
+        }
+      }
 
       writer.close
     }
