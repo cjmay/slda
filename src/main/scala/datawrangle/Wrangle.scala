@@ -130,35 +130,61 @@ object DataConsts {
   val WHITELIST = "data/TNG_WHITELIST"
   val STOP_WORDS = "data/TNG_STOP_WORDS"
   val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng"
-  val GIGAWORD_FILE_REGEX = """.*\.gz"""
+  val GIGAWORD_FILE_REGEX = """.*\.gz""".r
   val OOV = "_OOV_"
 }
 
-/*
-class GigawordWrangler(trainFrac: Double) {
-  val files = GigawordReader.getMatchingFiles(
-    DataConsts.GIGAWORD_DATA_DIR, DataConsts.GIGAWORD_FILE_REGEX)
-  val wordCounts = new HashMap[String,Int]()
-  val trainDocs: Array[Array[Boolean]] = Array.fill(files.length)(null)
+class GigawordWrangler {
+  val trainDir = new File(DataConsts.GIGAWORD_DATA_DIR, "train").getPath
+  val trainFiles = GigawordReader.getMatchingFiles(
+    trainDir, DataConsts.GIGAWORD_FILE_REGEX)
 
-  for (i <- 0 until files.length) {
-    val src = GigawordReader.gzippedSource(files(i))
-    val train = new ArrayBuffer[Boolean]()
+  val testDir = new File(DataConsts.GIGAWORD_DATA_DIR, "test").getPath
+  val testFiles = GigawordReader.getMatchingFiles(
+    testDir, DataConsts.GIGAWORD_FILE_REGEX)
+
+  val wordCounts = new HashMap[String,Int]()
+
+  for (file <- trainFiles) {
+    val src = GigawordReader.gzippedSource(file)
     for (line <- src.getLines()) {
-      if (Stats.sampleBernoulli(trainFrac)) {
-        train += true
-        val tokens = line.split(Text.WHITESPACE)
-        for (token <- tokens)
-          updateWordCounts(token)
-      } else {
-        train += true
-      }
+      val doc = line.split(Text.WHITESPACE)
+      val docIdx = doc(0).toInt
+      val tokens = doc.drop(1)
+      for (token <- tokens)
+        updateWordCounts(token)
     }
-    trainDocs(i) = train.toArray
   }
 
-  val numDocs = trainDocs.map(_.length).sum
   val vocab = Set(DataConsts.OOV) ++ wordCounts.filter(p => p._2 > 1).keySet
+
+  def replaceOOV(token: String): String =
+    if (vocab.contains(token)) token else DataConsts.OOV
+
+  def fileDocs(file: File): Iterator[(Int,Array[String])] =
+    for (line <- GigawordReader.gzippedSource(file).getLines())
+      yield {
+        val doc = line.split(Text.WHITESPACE)
+        val docIdx = doc(0).toInt
+        val tokens = doc.drop(1)
+        (docIdx, tokens.map(replaceOOV))
+      }
+
+  def trainDocs: Iterator[(Int,Array[String])] =
+    for (file <- trainFiles.toIterator; doc <- fileDocs(file))
+      yield doc
+
+  def testDocs: Iterator[(Int,Array[String])] =
+    for (file <- testFiles.toIterator; doc <- fileDocs(file))
+      yield doc
+
+  def testDocs(indexBound: Int): Iterator[(Int,Array[String])] =
+    for (file <- testFiles.toIterator;
+        doc <- fileDocs(file).filter(p => p._1 < indexBound))
+      yield doc
+
+  // TODO delta docs before current
+  // TODO delta docs after current
 
   def getVocab: Set[String] = vocab
 
@@ -168,7 +194,6 @@ class GigawordWrangler(trainFrac: Double) {
     else
       wordCounts(word) = 1
 }
-*/
 
 object GigawordDatasetSplitter {
   def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
