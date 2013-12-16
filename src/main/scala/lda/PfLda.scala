@@ -46,7 +46,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * weight vector lies below a certain threshold, we resample the
     * topics
     */
-  def ingestDoc(words: Array[String], evaluator: DualEvaluator): Int = {
+  def ingestDoc(words: Array[String], evaluator: Evaluator): Int = {
     val docIdx = particles.newDocumentUpdateAll()
     val now = System.currentTimeMillis
     (0 until words.length).foreach { i =>
@@ -62,7 +62,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     docIdx
   }
 
-  def evaluate(evaluator: DualEvaluator): Unit = {
+  def evaluate(evaluator: Evaluator): Unit = {
     // NOTE: if we do this immediately after ingestDoc or processWord
     // we will probably just pick a random particle because weights
     // have probably been reset to uniform (as last step in
@@ -76,7 +76,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
     * Algorithm 4 of Canini, et al "Online Inference of Topics..."
     */
   private def processWord(i: Int, words: Array[String], docIdx: Int,
-      evaluator: DualEvaluator): Unit = {
+      evaluator: Evaluator): Unit = {
     val word = words(i)
     currTokenNum += 1
 

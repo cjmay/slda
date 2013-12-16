@@ -175,17 +175,9 @@ class GigawordWrangler {
     for (file <- trainFiles.toIterator; doc <- fileDocs(file))
       yield doc._2
 
-  def testDocs: Iterator[Array[String]] =
+  def testDocs: Iterator[(Int,Array[String])] =
     for (file <- testFiles.toIterator; doc <- fileDocs(file))
-      yield doc._2
-
-  def testDocsIterable: Iterable[Array[String]] =
-    new Iterable[Array[String]]() {
-      def iterator: Iterator[Array[String]] = 
-        for (file <- testFiles.toIterator; doc <- fileDocs(file))
-          yield doc._2
-    }
-
+      yield doc
 
   // TODO delta docs before current
   // TODO delta docs after current

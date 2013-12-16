@@ -7,6 +7,7 @@ package stream
 
 import scala.annotation.tailrec
 import scala.collection.mutable.Map
+import scala.collection.mutable.Queue
 import scala.util.{ Random => Random }
 
 import globals.Constants
@@ -238,4 +239,36 @@ MappingStreamSampler[T] {
   override def getSampleSet: Map[T, Int] = sample
   override def capacity: Int = k
   override def occupied: Int = sample.size
+}
+
+class StreamHeadBuffer(stream: Iterator[(Int,Array[String])], k: Int) {
+  val before = new Queue[(Int,Array[String])]()
+  val after = new Queue[(Int,Array[String])]()
+  val sampler = new ReservoirSampler[Array[String]](k)
+
+  def add(currIdx: Int): Unit = {
+    while (stream.hasNext && (after.size < k))
+      after.enqueue(stream.next())
+
+    while (!after.isEmpty && (after.front._1 < currIdx)) {
+      if (stream.hasNext)
+        after.enqueue(stream.next())
+
+      val shiftedItem = after.dequeue()
+      before.enqueue(shiftedItem)
+      sampler.add(shiftedItem._2)
+    }
+
+    while (before.size > k)
+      before.dequeue()
+  }
+
+  def beforeIterator: Iterator[Array[String]] =
+    before.map(p => p._2).iterator
+
+  def afterIterator: Iterator[Array[String]] =
+    after.map(p => p._2).iterator
+
+  def sampleIterator: Iterator[Array[String]] =
+    sampler.getSampleSet.iterator
 }

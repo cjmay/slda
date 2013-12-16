@@ -5,6 +5,7 @@ import scala.util.matching.Regex
 import globals.Constants
 import evaluation._
 import wrangle._
+import stream._
 import scala.util.matching.Regex
 
 abstract class RunLdaParams {
@@ -17,6 +18,7 @@ abstract class RunLdaParams {
   val rejuvMcmcSteps: Int = 40
   val initialBatchSize: Int = 100
   val initialBatchMcmcSteps: Int = 150
+  val inferDocsSize: Int = 100
   val topics: Int = 10
   val seed: Long = 0
   val fixInitialSample: Boolean = true
@@ -49,10 +51,10 @@ object RunLda {
     val vocab = data.getVocab
     println("vocab size " + vocab.size)
 
-    val inferDocs = data.testDocsIterable
+    val inferDocs = new StreamHeadBuffer(data.testDocs, params.inferDocsSize)
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
       params.alpha, params.beta, vocab.size, inferDocs)
-    val evaluator = new DualEvaluator(inferentialSampler)
+    val evaluator = new Evaluator(inferentialSampler)
 
     println("initializing model...")
     val model = new PfLda(params.topics, params.alpha, params.beta,
