@@ -171,9 +171,9 @@ class GigawordWrangler {
         (docIdx, tokens.map(replaceOOV))
       }
 
-  def trainDocs: Iterator[Array[String]] =
+  def trainDocs: Iterator[(Int,Array[String])] =
     for (file <- trainFiles.toIterator; doc <- fileDocs(file))
-      yield doc._2
+      yield doc
 
   def testDocs: Iterator[(Int,Array[String])] =
     for (file <- testFiles.toIterator; doc <- fileDocs(file))
