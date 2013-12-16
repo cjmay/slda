@@ -82,7 +82,7 @@ class PfLda(val T: Int, val alpha: Double, val beta: Double,
 
     particles.unnormalizedReweightAll(word)
 
-    if (i == 0) evaluate(evaluator)
+    if (i == 0 && docIdx % 100 == 0) evaluate(evaluator)
 
     particles.transitionAll(i, words(i), docIdx)
     particles.normalizeWeights()
