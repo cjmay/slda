@@ -51,9 +51,9 @@ object RunLda {
     val vocab = data.getVocab
     println("vocab size " + vocab.size)
 
-    val inferDocs = new StreamHeadBuffer(data.testDocs, params.inferDocsSize)
+    val streamHeadBuffer = new StreamHeadBuffer(data.testDocs, params.inferDocsSize)
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
-      params.alpha, params.beta, vocab.size, inferDocs)
+      params.alpha, params.beta, vocab.size, streamHeadBuffer)
     val evaluator = new Evaluator(inferentialSampler)
 
     println("initializing model...")
@@ -65,8 +65,8 @@ object RunLda {
 
     val initialBatchSize = params.initialBatchSize
     val trainDocsIter = data.trainDocs
-    val initDocs = Stats.shuffle(
-      (0 until initialBatchSize).map(i => trainDocsIter.next)).toArray
+    val initDocPairs = (0 until initialBatchSize).map(i => trainDocsIter.next).toArray
+    val initDocs = Stats.shuffle(initDocPairs.map(p => p._2)).toArray
     model.initialize(initDocs, params.initialBatchMcmcSteps)
 
     // If we fixed a random seed earlier and haven't reinitialized it
@@ -75,11 +75,13 @@ object RunLda {
       Stats.setDefaultSeed()
 
     println("running particle filter...")
+    streamHeadBuffer.add(initDocPairs.last._1)
     var i = initialBatchSize
     while (trainDocsIter.hasNext) {
-      val doc = trainDocsIter.next
+      val (datasetIdx, doc) = trainDocsIter.next
       println("DOCUMENT " + i)
       model.ingestDoc(doc, evaluator)
+      streamHeadBuffer.add(datasetIdx)
       i += 1
     }
     model.evaluate(evaluator)

@@ -666,7 +666,9 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
+    var numWords = 0
     for (doc <- docs) {
+      numWords += doc.size
       for (wordIdx <- 0 until doc.size) {
         val word = doc(wordIdx)
         val denom = alpha * topics + z.sum
@@ -683,7 +685,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         }
       }
     }
-    (math.exp(-ll / docs.map(_.size).sum), ll)
+    (math.exp(-ll / numWords), ll)
   }
 }
 
