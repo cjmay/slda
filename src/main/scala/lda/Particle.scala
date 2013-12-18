@@ -652,17 +652,17 @@ class IncrementalStats(globalVect: GlobalUpdateVector,
 
 class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
     vocabSize: Int, streamHeadBuffer: StreamHeadBuffer) {
-  def afterPerplexity(globalVect: GlobalUpdateVector): (Double, Double) =
+  def afterPerplexity(globalVect: GlobalUpdateVector): (Double, Double, Int) =
     perplexity(streamHeadBuffer.afterIterator, globalVect)
 
-  def beforePerplexity(globalVect: GlobalUpdateVector): (Double, Double) =
+  def beforePerplexity(globalVect: GlobalUpdateVector): (Double, Double, Int) =
     perplexity(streamHeadBuffer.beforeIterator, globalVect)
 
-  def samplePerplexity(globalVect: GlobalUpdateVector): (Double, Double) =
+  def samplePerplexity(globalVect: GlobalUpdateVector): (Double, Double, Int) =
     perplexity(streamHeadBuffer.sampleIterator, globalVect)
 
   private def perplexity(docs: Iterator[Array[String]],
-      globalVect: GlobalUpdateVector): (Double, Double) = {
+      globalVect: GlobalUpdateVector): (Double, Double, Int) = {
     val w = Array.fill(topics)(0.0)
     val z = Array.fill(topics)(0.0)
     var ll = 0.0
@@ -685,7 +685,7 @@ class InferentialGibbsSampler(topics: Int, alpha: Double, beta: Double,
         }
       }
     }
-    (math.exp(-ll / numWords), ll)
+    (math.exp(-ll / numWords), ll, numWords)
   }
 }
 
