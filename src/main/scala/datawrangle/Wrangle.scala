@@ -136,49 +136,54 @@ object DataConsts {
 }
 
 object TNGReader {
-  val ORIG_FILE_REGEX = """\d+""".r
   val OUTPUT_FILE_NAME = "all.gz"
 
-	def trainTestDirs(dirname: String): (File, File) =
-		(new File(dirname, "train"), new File(dirname, "test"))
+  @tailrec
+  def getNestedFiles(dirs: Array[File], accum: Seq[File]): Seq[File] =
+    if (dirs.isEmpty)
+      accum
+    else
+      getNestedFiles(dirs.drop(1), dirs.head.listFiles.toSeq ++ accum)
 
-  def getFiles(dirname: String): Array[File] =
-    GzipDataset.getMatchingFiles(dirname, ORIG_FILE_REGEX)
-
-	def getFileIds(dirname: String): Set[Int] =
-    getFiles(dirname).map(_.getName.toInt).toSet
-
-  def makeSource(dirname: String, fileId: Int): Source =
-    Source.fromFile(new File(dirname, fileId.toString).getPath)
+	def getShuffledNestedFiles(dir: File): Seq[File] =
+    Stats.shuffle(getNestedFiles(dir.listFiles, Seq.empty))
 
   def main(args: Array[String]): Unit = {
-    val (trainInputDir, testInputDir) = trainTestDirs(args(0))
-    val (trainOutputDir, testOutputDir) = trainTestDirs(args(1))
+    val trainInputDir = new File(args(0))
+    val testInputDir = new File(args(1))
+    val outputDir = args(2)
+		val trainOutputDir = new File(outputDir, "train")
+		val testOutputDir = new File(outputDir, "test")
 
     val tokenizer = new Tokenizer()
 
-    val trainFileIds = getFileIds(trainInputDir.getPath)
-    val testFileIds = getFileIds(testInputDir.getPath)
-    val fileIds = trainFileIds ++ testFileIds
-		val sortedFileIds = fileIds.toArray.sortBy(identity)
-		val newFileIdMap = HashMap((0 until sortedFileIds.size).map({
-			i => (i, sortedFileIds(i))
-		}): _*)
+    val trainFiles = getShuffledNestedFiles(trainInputDir)
+    val testFiles = getShuffledNestedFiles(testInputDir)
+
+    var docIdx = 0
 
     val trainWriter = GzipDataset.makeWriter(trainOutputDir, OUTPUT_FILE_NAME)
-    val testWriter = GzipDataset.makeWriter(testOutputDir, OUTPUT_FILE_NAME)
-    for (i <- 0 until newFileIdMap.size) {
-      val fileId = newFileIdMap(i)
+    for (file <- trainFiles) {
+      println(file.getPath)
+      val src = Source.fromFile(file.getPath, "MacRoman")
       val tokens = new ArrayBuffer[String]()
-      val (src, writer) = if (trainFileIds.contains(fileId))
-        (makeSource(trainInputDir.getPath, fileId), trainWriter)
-      else
-        (makeSource(testInputDir.getPath, fileId), testWriter)
       for (line <- src.getLines())
         tokens ++= tokenizer.tokenize(line)
-      writer.write(i.toString + " " + tokens.mkString(" ") + "\n")
+      trainWriter.write(docIdx.toString + " " + tokens.mkString(" ") + "\n")
+      docIdx += 1
     }
     trainWriter.close
+
+    val testWriter = GzipDataset.makeWriter(testOutputDir, OUTPUT_FILE_NAME)
+    for (file <- testFiles) {
+      println(file.getPath)
+      val src = Source.fromFile(file.getPath, "MacRoman")
+      val tokens = new ArrayBuffer[String]()
+      for (line <- src.getLines())
+        tokens ++= tokenizer.tokenize(line)
+      testWriter.write(docIdx.toString + " " + tokens.mkString(" ") + "\n")
+      docIdx += 1
+    }
     testWriter.close
   }
 }
