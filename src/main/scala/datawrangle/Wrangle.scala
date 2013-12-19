@@ -152,9 +152,8 @@ object TNGReader {
     Source.fromFile(new File(dirname, fileId.toString).getPath)
 
   def main(args: Array[String]): Unit = {
-    val trainFrac = args(0).toDouble
-    val (trainInputDir, testInputDir) = trainTestDirs(args(1))
-    val (trainOutputDir, testOutputDir) = trainTestDirs(args(2))
+    val (trainInputDir, testInputDir) = trainTestDirs(args(0))
+    val (trainOutputDir, testOutputDir) = trainTestDirs(args(1))
 
     val tokenizer = new Tokenizer()
 
