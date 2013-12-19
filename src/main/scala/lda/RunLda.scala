@@ -41,7 +41,7 @@ object RunLda {
       Stats.setSeed(params.seed)
 
     println("loading corpus...")
-    val data = new GigawordWrangler()
+    val data = new GzipDataset(DataConsts.GIGAWORD_DATA_DIR)
 
     // If we fixed a random seed for the data shuffle but want a random
     // Gibbs initialization, reinitialize seed randomly
