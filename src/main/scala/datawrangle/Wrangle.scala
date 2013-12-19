@@ -144,7 +144,7 @@ object GigawordDatasetSplitter {
     val testDir = new File(outputDirname, "test")
 
     val files =
-      GzipDataset.sortedFiles(GigawordReader.getMatchingFiles(inputDirname))
+      GzipDataset.sortedFiles(GzipDataset.getMatchingFiles(inputDirname))
     var docIdx = 0
     for (file <- files) {
       val trainWriter = GzipDataset.makeWriter(trainDir, file)
@@ -232,18 +232,18 @@ object GzipDataset {
 
 class GzipDataset(dataDir: String) {
   val trainDir = new File(dataDir, "train").getPath
-  val trainFiles = sortedFiles(
-    getMatchingFiles(trainDir, DataConsts.GZIP_FILE_REGEX))
+  val trainFiles = GzipDataset.sortedFiles(
+    GzipDataset.getMatchingFiles(trainDir))
 
   val testDir = new File(dataDir, "test").getPath
-  val testFiles = sortedFiles(
-    getMatchingFiles(testDir, DataConsts.GZIP_FILE_REGEX))
+  val testFiles = GzipDataset.sortedFiles(
+    GzipDataset.getMatchingFiles(testDir))
 
   val wordCounts = new HashMap[String,Int]()
 
   for (file <- trainFiles) {
     println("* " + file.getPath)
-    val src = gzippedSource(file)
+    val src = GzipDataset.gzippedSource(file)
     for (line <- src.getLines()) {
       val doc = line.split(Text.WHITESPACE)
       val docIdx = doc(0).toInt
@@ -259,7 +259,7 @@ class GzipDataset(dataDir: String) {
     if (vocab.contains(token)) token else DataConsts.OOV
 
   def fileDocs(file: File): Iterator[(Int,Array[String])] =
-    for (line <- gzippedSource(file).getLines())
+    for (line <- GzipDataset.gzippedSource(file).getLines())
       yield {
         val doc = line.split(Text.WHITESPACE)
         val docIdx = doc(0).toInt
