@@ -131,7 +131,7 @@ object DataConsts {
   val STOP_WORDS = "data/TNG_STOP_WORDS"
   val GZIP_FILE_REGEX = """.*\.gz""".r
   val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng.split"
-  val TNG_DATA_DIR = "data/tng.split"
+  val TNG_DATA_DIR = "data/tng"
   val OOV = "_OOV_"
 }
 
