@@ -135,6 +135,46 @@ object DataConsts {
   val OOV = "_OOV_"
 }
 
+object TNGReader {
+	def trainTestDirnames(dirname: String): (String, String) =
+		(new File(dirname, "train").getPath, new File(dirname, "test").getPath)
+
+	def getFileIds(dirname: String): Set[Int] =
+    new File(dirname).listFiles.map(_.getName.toInt).toSet
+
+  def main(args: Array[String]): Unit = {
+    val trainFrac = args(0).toDouble
+    val inputDirname = args(1)
+    val (trainInputDirname, testInputDirname) =
+			trainTestDirnames(inputDirname)
+    val outputDirname = args(2)
+    val (trainOutputDirname, testOutputDirname) =
+			trainTestDirnames(outputDirname)
+
+    val fileIds = getFileIds(trainInputDirname) ++ getFileIds(testInputDirname)
+		val sortedFileIds = fileIds.toArray.sortBy(identity)
+		val newFileIdMap = HashMap((0 until sortedFileIds.size).map({
+			i => (sortedFileIds(i), i)
+		}): _*)
+
+/*
+    var docIdx = 0
+    for (file <- files) {
+      val writer = GzipDataset.makeWriter(trainDir, file)
+
+      val src = GzipDataset.gzippedSource(file)
+      for (line <- src.getLines()) {
+        writer.write(docIdx.toString + " " + line + "\n")
+        docIdx += 1
+      }
+
+      trainWriter.close
+      testWriter.close
+    }
+*/
+  }
+}
+
 object GigawordDatasetSplitter {
   def main(args: Array[String]): Unit = {
     val trainFrac = args(0).toDouble
