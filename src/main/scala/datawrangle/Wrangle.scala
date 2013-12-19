@@ -136,42 +136,51 @@ object DataConsts {
 }
 
 object TNGReader {
-	def trainTestDirnames(dirname: String): (String, String) =
-		(new File(dirname, "train").getPath, new File(dirname, "test").getPath)
+  val ORIG_FILE_REGEX = """\d+""".r
+  val OUTPUT_FILE_NAME = "all.gz"
+
+	def trainTestDirs(dirname: String): (File, File) =
+		(new File(dirname, "train"), new File(dirname, "test"))
+
+  def getFiles(dirname: String): Array[File] =
+    GzipDataset.getMatchingFiles(dirname, ORIG_FILE_REGEX)
 
 	def getFileIds(dirname: String): Set[Int] =
-    new File(dirname).listFiles.map(_.getName.toInt).toSet
+    getFiles(dirname).map(_.getName.toInt).toSet
+
+  def makeSource(dirname: String, fileId: Int): Source =
+    Source.fromFile(new File(dirname, fileId.toString).getPath)
 
   def main(args: Array[String]): Unit = {
     val trainFrac = args(0).toDouble
-    val inputDirname = args(1)
-    val (trainInputDirname, testInputDirname) =
-			trainTestDirnames(inputDirname)
-    val outputDirname = args(2)
-    val (trainOutputDirname, testOutputDirname) =
-			trainTestDirnames(outputDirname)
+    val (trainInputDir, testInputDir) = trainTestDirs(args(1))
+    val (trainOutputDir, testOutputDir) = trainTestDirs(args(2))
 
-    val fileIds = getFileIds(trainInputDirname) ++ getFileIds(testInputDirname)
+    val tokenizer = new Tokenizer()
+
+    val trainFileIds = getFileIds(trainInputDir.getPath)
+    val testFileIds = getFileIds(testInputDir.getPath)
+    val fileIds = trainFileIds ++ testFileIds
 		val sortedFileIds = fileIds.toArray.sortBy(identity)
 		val newFileIdMap = HashMap((0 until sortedFileIds.size).map({
-			i => (sortedFileIds(i), i)
+			i => (i, sortedFileIds(i))
 		}): _*)
 
-/*
-    var docIdx = 0
-    for (file <- files) {
-      val writer = GzipDataset.makeWriter(trainDir, file)
-
-      val src = GzipDataset.gzippedSource(file)
-      for (line <- src.getLines()) {
-        writer.write(docIdx.toString + " " + line + "\n")
-        docIdx += 1
-      }
-
-      trainWriter.close
-      testWriter.close
+    val trainWriter = GzipDataset.makeWriter(trainOutputDir, OUTPUT_FILE_NAME)
+    val testWriter = GzipDataset.makeWriter(testOutputDir, OUTPUT_FILE_NAME)
+    for (i <- 0 until newFileIdMap.size) {
+      val fileId = newFileIdMap(i)
+      val tokens = new ArrayBuffer[String]()
+      val (src, writer) = if (trainFileIds.contains(fileId))
+        (makeSource(trainInputDir.getPath, fileId), trainWriter)
+      else
+        (makeSource(testInputDir.getPath, fileId), testWriter)
+      for (line <- src.getLines())
+        tokens ++= tokenizer.tokenize(line)
+      writer.write(i.toString + " " + tokens.mkString(" ") + "\n")
     }
-*/
+    trainWriter.close
+    testWriter.close
   }
 }
 
@@ -187,8 +196,8 @@ object GigawordDatasetSplitter {
       GzipDataset.sortedFiles(GzipDataset.getMatchingFiles(inputDirname))
     var docIdx = 0
     for (file <- files) {
-      val trainWriter = GzipDataset.makeWriter(trainDir, file)
-      val testWriter = GzipDataset.makeWriter(testDir, file)
+      val trainWriter = GzipDataset.makeWriter(trainDir, file.getName)
+      val testWriter = GzipDataset.makeWriter(testDir, file.getName)
 
       val src = GzipDataset.gzippedSource(file)
       for (line <- src.getLines()) {
@@ -245,16 +254,19 @@ object GigawordReader {
 }
 
 object GzipDataset {
-  def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
+  def makeWriter(outputDir: File, filename: String): BufferedWriter = {
     outputDir.mkdirs()
-    gzippedWriter(new File(outputDir, inputFile.getName))
+    gzippedWriter(new File(outputDir, filename))
   }
 
   def sortedFiles(files: Array[File]): Array[File] =
     files.sortBy(f => f.getName)
 
+  def getMatchingFiles(dirname: String, regex: Regex): Array[File] = 
+    new File(dirname).listFiles(new RegexFilter(regex))
+
   def getMatchingFiles(dirname: String): Array[File] = 
-    new File(dirname).listFiles(new RegexFilter(DataConsts.GZIP_FILE_REGEX))
+    getMatchingFiles(dirname, DataConsts.GZIP_FILE_REGEX)
 
   def gzippedSource(file: File): Source =
     Source.fromInputStream(
