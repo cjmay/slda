@@ -179,9 +179,6 @@ class GigawordWrangler {
     for (file <- testFiles.toIterator; doc <- fileDocs(file))
       yield doc
 
-  // TODO delta docs before current
-  // TODO delta docs after current
-
   def getVocab: Set[String] = vocab
 
   private def updateWordCounts(word: String): Unit =
@@ -246,7 +243,7 @@ object GigawordReader {
         "UTF-8"))
 
   def main(args: Array[String]): Unit = {
-    val tokenizer = new GigawordTokenizer()
+    val tokenizer = new Tokenizer()
     val inputDirname = args(0)
     val outputDirname = args(1)
     for (file <- getMatchingFiles(inputDirname, """.*\.gz""".r)) {
@@ -284,7 +281,7 @@ object GigawordReader {
   }
 }
 
-class GigawordTokenizer {
+class Tokenizer {
   val blacklist = Text.stopWords(DataConsts.STOP_WORDS)
   val badness = """\W|_""".r
 
