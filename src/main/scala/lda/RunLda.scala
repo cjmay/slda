@@ -23,9 +23,33 @@ abstract class RunLdaParams {
   val seed: Long = 0
   val fixInitialSample: Boolean = true
   val fixInitialModel: Boolean = false
+  val dataDir: String
+  def makeEvaluator(testDocs: Iterator[(Int,Array[String])],
+      vocab: Set[String]): Evaluator
 }
 
-object GigaParams extends RunLdaParams { }
+object GigaParams extends RunLdaParams {
+  val dataDir = DataConsts.GIGAWORD_DATA_DIR
+
+  override def makeEvaluator(testDocs: Iterator[(Int,Array[String])],
+      vocab: Set[String]): Evaluator = {
+    val streamHeadBuffer = new StreamHeadBuffer(testDocs, inferDocsSize)
+    var inferentialSampler = new InferentialGibbsSampler(topics, alpha, beta,
+      vocab.size)
+    new GigawordEvaluator(inferentialSampler, streamHeadBuffer)
+  }
+}
+
+object TNGParams extends RunLdaParams {
+  val dataDir = DataConsts.TNG_DATA_DIR
+
+  override def makeEvaluator(testDocs: Iterator[(Int,Array[String])],
+      vocab: Set[String]): Evaluator = {
+    var inferentialSampler = new InferentialGibbsSampler(topics, alpha, beta,
+      vocab.size)
+    new StaticEvaluator(inferentialSampler, testDocs.map(_._2).toArray)
+  }
+}
 
 object RunLda {
   def main (args: Array[String]) {
@@ -41,7 +65,7 @@ object RunLda {
       Stats.setSeed(params.seed)
 
     println("loading corpus...")
-    val data = new GzipDataset(DataConsts.GIGAWORD_DATA_DIR)
+    val data = new GzipDataset(params.dataDir)
 
     // If we fixed a random seed for the data shuffle but want a random
     // Gibbs initialization, reinitialize seed randomly
@@ -51,10 +75,7 @@ object RunLda {
     val vocab = data.getVocab
     println("vocab size " + vocab.size)
 
-    val streamHeadBuffer = new StreamHeadBuffer(data.testDocs, params.inferDocsSize)
-    var inferentialSampler = new InferentialGibbsSampler(params.topics,
-      params.alpha, params.beta, vocab.size, streamHeadBuffer)
-    val evaluator = new Evaluator(inferentialSampler)
+    val evaluator = params.makeEvaluator(data.testDocs, vocab)
 
     println("initializing model...")
     val model = new PfLda(params.topics, params.alpha, params.beta,
@@ -75,13 +96,13 @@ object RunLda {
       Stats.setDefaultSeed()
 
     println("running particle filter...")
-    streamHeadBuffer.add(initDocPairs.last._1)
+    evaluator.updateDatasetPos(initDocPairs.last._1)
     var i = initialBatchSize
     while (trainDocsIter.hasNext) {
       val (datasetIdx, doc) = trainDocsIter.next
       println("DOCUMENT " + i)
       model.ingestDoc(doc, evaluator)
-      streamHeadBuffer.add(datasetIdx)
+      evaluator.updateDatasetPos(datasetIdx)
       i += 1
     }
     model.evaluate(evaluator)

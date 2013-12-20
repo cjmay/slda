@@ -131,47 +131,60 @@ object DataConsts {
   val STOP_WORDS = "data/TNG_STOP_WORDS"
   val GZIP_FILE_REGEX = """.*\.gz""".r
   val GIGAWORD_DATA_DIR = "data/gigaword/nyt_eng.split"
-  val TNG_DATA_DIR = "data/tng.split"
+  val TNG_DATA_DIR = "data/tng"
   val OOV = "_OOV_"
 }
 
 object TNGReader {
-	def trainTestDirnames(dirname: String): (String, String) =
-		(new File(dirname, "train").getPath, new File(dirname, "test").getPath)
+  val OUTPUT_FILE_NAME = "all.gz"
 
-	def getFileIds(dirname: String): Set[Int] =
-    new File(dirname).listFiles.map(_.getName.toInt).toSet
+  @tailrec
+  def getNestedFiles(dirs: Array[File], accum: Seq[File]): Seq[File] =
+    if (dirs.isEmpty)
+      accum
+    else
+      getNestedFiles(dirs.drop(1), dirs.head.listFiles.toSeq ++ accum)
+
+	def getShuffledNestedFiles(dir: File): Seq[File] =
+    Stats.shuffle(getNestedFiles(dir.listFiles, Seq.empty))
 
   def main(args: Array[String]): Unit = {
-    val trainFrac = args(0).toDouble
-    val inputDirname = args(1)
-    val (trainInputDirname, testInputDirname) =
-			trainTestDirnames(inputDirname)
-    val outputDirname = args(2)
-    val (trainOutputDirname, testOutputDirname) =
-			trainTestDirnames(outputDirname)
+    val trainInputDir = new File(args(0))
+    val testInputDir = new File(args(1))
+    val outputDir = args(2)
+		val trainOutputDir = new File(outputDir, "train")
+		val testOutputDir = new File(outputDir, "test")
 
-    val fileIds = getFileIds(trainInputDirname) ++ getFileIds(testInputDirname)
-		val sortedFileIds = fileIds.toArray.sortBy(identity)
-		val newFileIdMap = HashMap((0 until sortedFileIds.size).map({
-			i => (sortedFileIds(i), i)
-		}): _*)
+    val tokenizer = new Tokenizer()
 
-/*
+    val trainFiles = getShuffledNestedFiles(trainInputDir)
+    val testFiles = getShuffledNestedFiles(testInputDir)
+
     var docIdx = 0
-    for (file <- files) {
-      val writer = GzipDataset.makeWriter(trainDir, file)
 
-      val src = GzipDataset.gzippedSource(file)
-      for (line <- src.getLines()) {
-        writer.write(docIdx.toString + " " + line + "\n")
-        docIdx += 1
-      }
-
-      trainWriter.close
-      testWriter.close
+    val trainWriter = GzipDataset.makeWriter(trainOutputDir, OUTPUT_FILE_NAME)
+    for (file <- trainFiles) {
+      println(file.getPath)
+      val src = Source.fromFile(file.getPath, "MacRoman")
+      val tokens = new ArrayBuffer[String]()
+      for (line <- src.getLines())
+        tokens ++= tokenizer.tokenize(line)
+      trainWriter.write(docIdx.toString + " " + tokens.mkString(" ") + "\n")
+      docIdx += 1
     }
-*/
+    trainWriter.close
+
+    val testWriter = GzipDataset.makeWriter(testOutputDir, OUTPUT_FILE_NAME)
+    for (file <- testFiles) {
+      println(file.getPath)
+      val src = Source.fromFile(file.getPath, "MacRoman")
+      val tokens = new ArrayBuffer[String]()
+      for (line <- src.getLines())
+        tokens ++= tokenizer.tokenize(line)
+      testWriter.write(docIdx.toString + " " + tokens.mkString(" ") + "\n")
+      docIdx += 1
+    }
+    testWriter.close
   }
 }
 
@@ -187,8 +200,8 @@ object GigawordDatasetSplitter {
       GzipDataset.sortedFiles(GzipDataset.getMatchingFiles(inputDirname))
     var docIdx = 0
     for (file <- files) {
-      val trainWriter = GzipDataset.makeWriter(trainDir, file)
-      val testWriter = GzipDataset.makeWriter(testDir, file)
+      val trainWriter = GzipDataset.makeWriter(trainDir, file.getName)
+      val testWriter = GzipDataset.makeWriter(testDir, file.getName)
 
       val src = GzipDataset.gzippedSource(file)
       for (line <- src.getLines()) {
@@ -245,16 +258,19 @@ object GigawordReader {
 }
 
 object GzipDataset {
-  def makeWriter(outputDir: File, inputFile: File): BufferedWriter = {
+  def makeWriter(outputDir: File, filename: String): BufferedWriter = {
     outputDir.mkdirs()
-    gzippedWriter(new File(outputDir, inputFile.getName))
+    gzippedWriter(new File(outputDir, filename))
   }
 
   def sortedFiles(files: Array[File]): Array[File] =
     files.sortBy(f => f.getName)
 
+  def getMatchingFiles(dirname: String, regex: Regex): Array[File] = 
+    new File(dirname).listFiles(new RegexFilter(regex))
+
   def getMatchingFiles(dirname: String): Array[File] = 
-    new File(dirname).listFiles(new RegexFilter(DataConsts.GZIP_FILE_REGEX))
+    getMatchingFiles(dirname, DataConsts.GZIP_FILE_REGEX)
 
   def gzippedSource(file: File): Source =
     Source.fromInputStream(
