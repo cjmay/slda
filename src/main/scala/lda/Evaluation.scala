@@ -7,12 +7,13 @@ import lda._
 import stream._
 
 trait Evaluator {
-  def outOfSampleEval(globalVect: GlobalUpdateVector)
+  def outOfSampleEval(globalVect: GlobalUpdateVector): Unit
+  def updateDatasetPos(datasetIdx: Int): Unit
 }
 
 class GigawordEvaluator(inferentialSampler: InferentialGibbsSampler,
     streamHeadBuffer: StreamHeadBuffer) extends Evaluator {
-  def outOfSampleEval(globalVect: GlobalUpdateVector): Unit = {
+  override def outOfSampleEval(globalVect: GlobalUpdateVector): Unit = {
     val (beforePerplexity, beforeLL, beforeNumWords) = inferentialSampler.perplexity(streamHeadBuffer.beforeIterator, globalVect)
     println("BEFORE OUT-OF-SAMPLE PERPLEXITY " + beforePerplexity)
     println("BEFORE OUT-OF-SAMPLE LOG-LIKELIHOOD " + beforeLL)
@@ -28,6 +29,9 @@ class GigawordEvaluator(inferentialSampler: InferentialGibbsSampler,
     println("SAMPLE OUT-OF-SAMPLE LOG-LIKELIHOOD " + sampleLL)
     println("SAMPLE OUT-OF-SAMPLE NUMWORDS " + sampleNumWords)
   }
+
+  override def updateDatasetPos(datasetIdx: Int): Unit =
+    streamHeadBuffer.add(datasetIdx)
 }
 
 class StaticEvaluator(inferentialSampler: InferentialGibbsSampler,
@@ -38,4 +42,6 @@ class StaticEvaluator(inferentialSampler: InferentialGibbsSampler,
     println("OUT-OF-SAMPLE LOG-LIKELIHOOD " + ll)
     println("OUT-OF-SAMPLE NUMWORDS " + numWords)
   }
+
+  def updateDatasetPos(datasetIdx: Int): Unit = { }
 }
