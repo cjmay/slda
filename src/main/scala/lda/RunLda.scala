@@ -53,8 +53,8 @@ object RunLda {
 
     val streamHeadBuffer = new StreamHeadBuffer(data.testDocs, params.inferDocsSize)
     var inferentialSampler = new InferentialGibbsSampler(params.topics,
-      params.alpha, params.beta, vocab.size, streamHeadBuffer)
-    val evaluator = new Evaluator(inferentialSampler)
+      params.alpha, params.beta, vocab.size)
+    val evaluator = new GigawordEvaluator(inferentialSampler, streamHeadBuffer)
 
     println("initializing model...")
     val model = new PfLda(params.topics, params.alpha, params.beta,
